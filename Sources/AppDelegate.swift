@@ -51,7 +51,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
     }
 
     private func setupStatusItem() {
-        let statusWidth: CGFloat = 104
+        let statusWidth: CGFloat = 72
         let item = NSStatusBar.system.statusItem(withLength: statusWidth)
         let view = StatusBarView(frame: NSRect(x: 0, y: 0, width: statusWidth, height: NSStatusBar.system.thickness))
         view.apiService = apiService

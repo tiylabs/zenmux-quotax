@@ -11,7 +11,7 @@ public final class StatusBarView: NSView {
         didSet { bindService() }
     }
 
-    private static let statusWidth: CGFloat = 104
+    private static let statusWidth: CGFloat = 72
     private var cancellables: Set<AnyCancellable> = []
 
     public override var intrinsicContentSize: NSSize {
@@ -48,10 +48,12 @@ public final class StatusBarView: NSView {
     }
 
     private func drawQuotaStatus(in bounds: NSRect) {
-        let labelX: CGFloat = 2
-        let labelWidth: CGFloat = 22
+        drawBackground(in: bounds)
+
+        let labelX: CGFloat = 4
+        let labelWidth: CGFloat = 18
         let valueX = labelX + labelWidth + 2
-        let valueWidth = max(0, bounds.width - valueX - 2)
+        let valueWidth = max(0, bounds.width - valueX - 4)
         let rowHeight: CGFloat = 10
         let totalHeight = rowHeight * 2
         let topY = (bounds.height + totalHeight) / 2 - rowHeight
@@ -66,8 +68,16 @@ public final class StatusBarView: NSView {
             color = .labelColor
         }
 
-        drawRow(label: "5H:", value: quotaText(for: apiService?.subscriptionData?.quota5Hour), labelX: labelX, labelWidth: labelWidth, valueX: valueX, valueWidth: valueWidth, y: topY, color: color)
-        drawRow(label: "7D:", value: quotaText(for: apiService?.subscriptionData?.quota7Day), labelX: labelX, labelWidth: labelWidth, valueX: valueX, valueWidth: valueWidth, y: bottomY, color: color)
+        let quota5 = quotaDisplay(for: apiService?.subscriptionData?.quota5Hour)
+        let quota7 = quotaDisplay(for: apiService?.subscriptionData?.quota7Day)
+        drawRow(label: "5H", value: quota5.text, labelX: labelX, labelWidth: labelWidth, valueX: valueX, valueWidth: valueWidth, y: topY, color: color)
+        drawRow(label: "7D", value: quota7.text, labelX: labelX, labelWidth: labelWidth, valueX: valueX, valueWidth: valueWidth, y: bottomY, color: color)
+    }
+
+    private func drawBackground(in bounds: NSRect) {
+        let rect = bounds.insetBy(dx: 1, dy: 1.5)
+        NSColor.controlAccentColor.withAlphaComponent(0.08).setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
     }
 
     private func drawRow(label: String, value: String, labelX: CGFloat, labelWidth: CGFloat, valueX: CGFloat, valueWidth: CGFloat, y: CGFloat, color: NSColor) {
@@ -95,7 +105,7 @@ public final class StatusBarView: NSView {
             .draw(in: NSRect(x: valueX, y: y, width: valueWidth, height: 10))
     }
 
-    private func quotaText(for quota: ZenmuxQuotaWindow?) -> String {
+    private func quotaDisplay(for quota: ZenmuxQuotaWindow?) -> (text: String, progress: Double?) {
         let mode = settings?.statusBarQuotaDisplayMode ?? .used
         let percentage: Double?
         switch mode {
@@ -104,8 +114,8 @@ public final class StatusBarView: NSView {
         case .left:
             percentage = leftPercentage(for: quota)
         }
-        guard let percentage else { return "—" }
-        return "\(formatPercent(percentage)) \(mode.rawValue)"
+        guard let percentage else { return ("—", nil) }
+        return (formatPercent(percentage), percentage)
     }
 
     private func leftPercentage(for quota: ZenmuxQuotaWindow?) -> Double? {
