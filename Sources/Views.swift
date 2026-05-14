@@ -257,13 +257,13 @@ struct MenuContentView: View {
 
             if let data = apiService.subscriptionData {
                 if let quota5 = data.quota5Hour {
-                    MenuQuotaView(title: "5 hour quota", window: quota5, timeZone: settings.timeZone)
+                    MenuQuotaView(title: "5 hour flows", window: quota5, timeZone: settings.timeZone)
                 }
                 if let quota7 = data.quota7Day {
-                    MenuQuotaView(title: "7 day quota", window: quota7, timeZone: settings.timeZone)
+                    MenuQuotaView(title: "7 day flows", window: quota7, timeZone: settings.timeZone)
                 }
                 if let monthly = data.quotaMonthly {
-                    MenuQuotaView(title: "Monthly quota", monthly: monthly, timeZone: settings.timeZone)
+                    MenuQuotaView(title: "Monthly flows", monthly: monthly, timeZone: settings.timeZone)
                 }
             } else {
                 ContentUnavailableView(
@@ -410,8 +410,32 @@ struct SettingsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Toggle("Auto refresh", isOn: $settings.alwaysRefresh)
-                        .help("Keep quota data updated while Quotax is running.")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle("Auto refresh", isOn: $settings.alwaysRefresh)
+                            .help("Keep quota data updated while Quotax is running.")
+
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Refresh interval")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                Text("How often Quotax requests fresh quota data.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            TextField("refresh_interval", value: $settings.refreshInterval, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 76)
+                            Text("sec")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Divider()
 
                     Toggle("Launch at login", isOn: $settings.launchAtLogin)
 
@@ -424,48 +448,16 @@ struct SettingsView: View {
 
                     Divider()
 
-                    HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Refresh interval")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Text("How often Quotax requests fresh quota data.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    Picker("Status bar quota", selection: $settings.statusBarQuotaDisplayMode) {
+                        ForEach(StatusBarQuotaDisplayMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
                         }
-
-                        Spacer()
-
-                        TextField("refresh_interval", value: $settings.refreshInterval, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 76)
-                        Text("sec")
-                            .foregroundStyle(.secondary)
                     }
+                    .pickerStyle(.segmented)
 
-                    Divider()
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Status bar quota")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        Picker("Status bar quota", selection: $settings.statusBarQuotaDisplayMode) {
-                            ForEach(StatusBarQuotaDisplayMode.allCases) { mode in
-                                Text(mode.title).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Time zone")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        Picker("Time zone", selection: $settings.timeZoneIdentifier) {
-                            ForEach(SettingsManager.preferredTimeZoneIdentifiers, id: \.self) { identifier in
-                                Text(identifier).tag(identifier)
-                            }
+                    Picker("Time zone", selection: $settings.timeZoneIdentifier) {
+                        ForEach(SettingsManager.preferredTimeZoneIdentifiers, id: \.self) { identifier in
+                            Text(identifier).tag(identifier)
                         }
                     }
                 }
