@@ -1,37 +1,105 @@
 import AppKit
 import SwiftUI
 
+struct PanelTimeFormatter {
+    private static func outputFormatter(timeZone: TimeZone) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }
+
+    private static func isoFormatter(formatOptions: ISO8601DateFormatter.Options) -> ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = formatOptions
+        return formatter
+    }
+
+    static func format(date: Date, timeZone: TimeZone) -> String {
+        outputFormatter(timeZone: timeZone).string(from: date)
+    }
+
+    static func format(isoString: String, timeZone: TimeZone) -> String {
+        let date = isoFormatter(formatOptions: [.withInternetDateTime, .withFractionalSeconds]).date(from: isoString)
+            ?? isoFormatter(formatOptions: [.withInternetDateTime]).date(from: isoString)
+        guard let date else { return isoString }
+        return format(date: date, timeZone: timeZone)
+    }
+
+    static func relativeUpdatedText(since date: Date, now: Date = Date()) -> String {
+        let elapsed = max(0, Int(now.timeIntervalSince(date)))
+        if elapsed < 60 { return "Updated \(elapsed) seconds ago" }
+        let minutes = elapsed / 60
+        if minutes < 60 { return "Updated \(minutes) minutes ago" }
+        let hours = minutes / 60
+        if hours < 24 { return "Updated \(hours) hours ago" }
+        let days = hours / 24
+        return "Updated \(days) days ago"
+    }
+}
+
 struct MenuHeaderView: View {
     @ObservedObject var apiService: ZenmuxAPIService
+    @ObservedObject var settings: SettingsManager
+    let data: ZenmuxSubscriptionData?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Image(nsImage: zenmuxAppIcon())
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 34, height: 34)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Quotax")
-                        .font(.headline)
-                    Text(subtitle)
+        HStack(alignment: .top) {
+            Image(nsImage: zenmuxAppIcon())
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 34, height: 34)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(expText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .layoutPriority(1)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                if let data {
+                    Text("Status: \(data.primaryStatus)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if apiService.isRefreshing {
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    if let updatedText {
+                        Text(updatedText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                } else if apiService.isRefreshing {
                     ProgressView()
                         .controlSize(.small)
                 }
             }
+            .offset(y: 2)
         }
     }
 
-    private var subtitle: String {
-        if apiService.isPaused { return "Auto refresh paused" }
-        if let updated = apiService.lastUpdated { return "Updated \(updated.formatted(date: .omitted, time: .shortened))" }
-        return "Management API"
+    private var title: String {
+        guard let data else { return "ZenMux" }
+        return "ZenMux · \(data.primaryPlanName)"
+    }
+
+    private var expText: String {
+        guard let expiresAt = data?.plan?.expiresAt else { return "Management API" }
+        return "Exp: \(PanelTimeFormatter.format(isoString: expiresAt, timeZone: settings.timeZone))"
+    }
+
+    private var updatedText: String? {
+        guard !apiService.isPaused, let updated = apiService.lastUpdated else { return nil }
+        return PanelTimeFormatter.relativeUpdatedText(since: updated)
     }
 }
 
@@ -44,8 +112,10 @@ struct MenuQuotaView: View {
     let maxValueUSD: Double?
     let usagePercentage: Double?
     let resetsAt: String?
+    let timeZone: TimeZone
+    let showsWaveProgress: Bool
 
-    init(title: String, monthly: ZenmuxQuotaMonthly) {
+    init(title: String, monthly: ZenmuxQuotaMonthly, timeZone: TimeZone) {
         self.title = title
         self.usedFlows = nil
         self.remainingFlows = nil
@@ -54,9 +124,11 @@ struct MenuQuotaView: View {
         self.maxValueUSD = monthly.maxValueUSD
         self.usagePercentage = nil
         self.resetsAt = nil
+        self.timeZone = timeZone
+        self.showsWaveProgress = false
     }
 
-    init(title: String, window: ZenmuxQuotaWindow) {
+    init(title: String, window: ZenmuxQuotaWindow, timeZone: TimeZone) {
         self.title = title
         self.usedFlows = window.usedFlows
         self.remainingFlows = window.remainingFlows
@@ -65,39 +137,39 @@ struct MenuQuotaView: View {
         self.maxValueUSD = window.maxValueUSD
         self.usagePercentage = window.usagePercentage
         self.resetsAt = window.resetsAt
+        self.timeZone = timeZone
+        self.showsWaveProgress = true
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
                 Text(title).font(.subheadline).bold()
                 Spacer()
-                if let remainingFlows {
-                    Text("\(formatNumber(remainingFlows)) left")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            HStack(spacing: 12) {
-                metric("Used", value: usedFlows.map(formatNumber) ?? "—")
-                metric("Remaining", value: remainingFlows.map(formatNumber) ?? "—")
-                metric("Max", value: maxFlows.map(formatNumber) ?? "—")
-                metric("USD", value: maxValueUSD.map { "$" + formatNumber($0) } ?? usedValueUSD.map { "$" + formatNumber($0) } ?? "—")
-            }
-            HStack(spacing: 10) {
-                if let usagePercentage {
-                    Text("Usage: \(formatPercent(usagePercentage))")
-                }
                 if let resetsAt, !resetsAt.isEmpty {
-                    Text("Resets: \(resetsAt)")
+                    Text("Resets: \(PanelTimeFormatter.format(isoString: resetsAt, timeZone: timeZone))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
+            HStack(spacing: 0) {
+                metric("Used", value: usedFlows.map(formatNumber) ?? "—")
+                metric("Left", value: remainingFlows.map(formatNumber) ?? "—")
+                metric("Limit", value: maxFlows.map(formatNumber) ?? "—")
+                metric("Value", value: maxValueUSD.map { "$" + formatNumber($0) } ?? usedValueUSD.map { "$" + formatNumber($0) } ?? "—")
+            }
         }
         .padding(8)
-        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+        .background {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.quaternary.opacity(0.6))
+            if showsWaveProgress, let usagePercentage {
+                WaveProgressBackground(progress: min(max(usagePercentage, 0), 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
     }
 
     private func metric(_ label: String, value: String) -> some View {
@@ -105,6 +177,7 @@ struct MenuQuotaView: View {
             Text(label).font(.caption2).foregroundStyle(.secondary)
             Text(value).font(.caption).monospacedDigit()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func formatNumber(_ value: Double) -> String {
@@ -113,12 +186,60 @@ struct MenuQuotaView: View {
         formatter.minimumFractionDigits = value.rounded() == value ? 0 : 2
         return formatter.string(from: NSNumber(value: value)) ?? String(value)
     }
+}
 
-    private func formatPercent(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .percent
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value * 100)%"
+struct WaveProgressBackground: View {
+    let progress: Double
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width * progress
+            ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.accentColor.opacity(0.20),
+                                Color.cyan.opacity(0.14)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: width)
+
+                WaveShape(progressWidth: width, amplitude: 5, wavelength: 34)
+                    .fill(Color.white.opacity(0.18))
+                    .frame(width: width)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+struct WaveShape: Shape {
+    let progressWidth: CGFloat
+    let amplitude: CGFloat
+    let wavelength: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        guard progressWidth > 0 else { return path }
+
+        let waveWidth = min(progressWidth, rect.width)
+        let centerY = rect.midY
+        path.move(to: CGPoint(x: 0, y: 0))
+        path.addLine(to: CGPoint(x: waveWidth, y: 0))
+        path.addLine(to: CGPoint(x: waveWidth, y: centerY))
+
+        stride(from: waveWidth, through: CGFloat(0), by: -2).forEach { x in
+            let y = centerY + sin((x / wavelength) * .pi * 2) * amplitude
+            path.addLine(to: CGPoint(x: x, y: y))
+        }
+
+        path.addLine(to: CGPoint(x: 0, y: 0))
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -132,18 +253,17 @@ struct MenuContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            MenuHeaderView(apiService: apiService)
+            MenuHeaderView(apiService: apiService, settings: settings, data: apiService.subscriptionData)
 
             if let data = apiService.subscriptionData {
-                planSection(data)
                 if let quota5 = data.quota5Hour {
-                    MenuQuotaView(title: "5 hour quota", window: quota5)
+                    MenuQuotaView(title: "5 hour quota", window: quota5, timeZone: settings.timeZone)
                 }
                 if let quota7 = data.quota7Day {
-                    MenuQuotaView(title: "7 day quota", window: quota7)
+                    MenuQuotaView(title: "7 day quota", window: quota7, timeZone: settings.timeZone)
                 }
                 if let monthly = data.quotaMonthly {
-                    MenuQuotaView(title: "Monthly quota", monthly: monthly)
+                    MenuQuotaView(title: "Monthly quota", monthly: monthly, timeZone: settings.timeZone)
                 }
             } else {
                 ContentUnavailableView(
@@ -162,38 +282,35 @@ struct MenuContentView: View {
             }
 
             Divider()
-            HStack {
-                Button("Refresh", action: onRefresh)
-                Button("Open Management", action: onOpenManagement)
-                Spacer()
-                Button("Settings", action: onOpenSettings)
-                Button("Quit", action: onQuit)
+                .padding(.top, 2)
+            HStack(spacing: 8) {
+                footerButton("Refresh", systemImage: "arrow.clockwise", action: onRefresh)
+                footerButton("Settings", systemImage: "gearshape", action: onOpenSettings)
+                Spacer(minLength: 12)
+                footerButton("Quit", systemImage: "power", role: .destructive, action: onQuit)
             }
         }
         .padding(14)
         .frame(width: 360)
     }
 
-    private func planSection(_ data: ZenmuxSubscriptionData) -> some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(data.primaryPlanName)
-                    .font(.title3)
-                    .bold()
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("Status: \(data.primaryStatus)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if let expiresAt = data.plan?.expiresAt {
-                    Text(expiresAt)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+    private func footerButton(_ title: String, systemImage: String, role: ButtonRole? = nil, action: @escaping () -> Void) -> some View {
+        Button(role: role, action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 32, height: 30)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(role == .destructive ? Color.red.opacity(0.10) : Color.primary.opacity(0.07))
                 }
-            }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(role == .destructive ? Color.red.opacity(0.22) : Color.white.opacity(0.22), lineWidth: 1)
+                }
         }
+        .buttonStyle(.plain)
+        .foregroundStyle(role == .destructive ? .red : .primary)
+        .accessibilityLabel(title)
     }
 }
 
@@ -203,46 +320,171 @@ struct SettingsView: View {
     @State private var apiKeyInput: String = ""
     @State private var showKeySaved = false
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Quotax")
-                .font(.title2)
-                .bold()
+    private static let managementPortalURL = URL(string: "https://zenmux.ai/platform/management")!
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Management API Key").font(.headline)
-                HStack {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            header
+            apiKeySection
+            preferencesSection
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .frame(width: 500, height: 500)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear {
+            apiKeyInput = settings.apiKey
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Image(nsImage: zenmuxAppIcon())
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 42, height: 42)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Quotax")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Text("Settings for your ZenMux quota monitor")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    private var apiKeySection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Management API Key")
+                            .font(.headline)
+                        Text("Connect Quotax to your ZenMux subscription data.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer()
+
+                    Link("Get Key", destination: Self.managementPortalURL)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                }
+
+                HStack(spacing: 8) {
                     SecureField("Zenmux Management API Key", text: $apiKeyInput)
                         .textFieldStyle(.roundedBorder)
                     Button("Save") {
                         onSaveAPIKey(apiKeyInput)
                         showKeySaved = true
                     }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
                 }
+
                 if showKeySaved {
-                    Text("API Key saved")
+                    Label("API Key saved", systemImage: "checkmark.circle.fill")
                         .font(.caption)
                         .foregroundStyle(.green)
                 }
             }
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Auto refresh", isOn: $settings.alwaysRefresh)
-                HStack {
-                    Text("Refresh interval")
-                    TextField("refresh_interval", value: $settings.refreshInterval, format: .number)
-                        .frame(width: 80)
-                    Text("seconds")
+    private var preferencesSection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Preferences")
+                        .font(.headline)
+                    Text("Tune update behavior and the menu bar display.")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-            }
 
-            Spacer()
+                VStack(alignment: .leading, spacing: 10) {
+                    Toggle("Auto refresh", isOn: $settings.alwaysRefresh)
+                        .help("Keep quota data updated while Quotax is running.")
+
+                    Toggle("Launch at login", isOn: $settings.launchAtLogin)
+
+                    if let launchAtLoginError = settings.launchAtLoginError {
+                        Label("Launch at login: \(launchAtLoginError)", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Divider()
+
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Refresh interval")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text("How often Quotax requests fresh quota data.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        TextField("refresh_interval", value: $settings.refreshInterval, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 76)
+                        Text("sec")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Status bar quota")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Picker("Status bar quota", selection: $settings.statusBarQuotaDisplayMode) {
+                            ForEach(StatusBarQuotaDisplayMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Time zone")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Picker("Time zone", selection: $settings.timeZoneIdentifier) {
+                            ForEach(SettingsManager.preferredTimeZoneIdentifiers, id: \.self) { identifier in
+                                Text(identifier).tag(identifier)
+                            }
+                        }
+                    }
+                }
+            }
         }
-        .padding(20)
-        .frame(width: 460, height: 300)
-        .onAppear {
-            apiKeyInput = settings.apiKey
-        }
+    }
+
+    private func settingsCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 4)
     }
 }

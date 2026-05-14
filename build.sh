@@ -23,6 +23,7 @@ SWIFT_FILES=("$ROOT"/Sources/*.swift)
   -framework AppKit \
   -framework SwiftUI \
   -framework Foundation \
+  -framework ServiceManagement \
   "${SWIFT_FILES[@]}" \
   -o "$EXECUTABLE"
 

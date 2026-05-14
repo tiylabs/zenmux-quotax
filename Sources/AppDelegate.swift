@@ -17,6 +17,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
         setupApplicationMenu()
         setupStatusItem()
         apiService.startAutoRefresh(settings: settings)
+        settings.syncLaunchAtLoginSetting()
         if settings.trimmedAPIKey.isEmpty {
             openSettings()
         } else {
@@ -50,9 +51,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
     }
 
     private func setupStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: 104)
-        let view = StatusBarView(frame: NSRect(x: 0, y: 0, width: 104, height: NSStatusBar.system.thickness))
+        let statusWidth: CGFloat = 104
+        let item = NSStatusBar.system.statusItem(withLength: statusWidth)
+        let view = StatusBarView(frame: NSRect(x: 0, y: 0, width: statusWidth, height: NSStatusBar.system.thickness))
         view.apiService = apiService
+        view.settings = settings
         item.button?.title = ""
         item.button?.image = nil
         item.button?.addSubview(view)
@@ -104,9 +107,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
     public func menuWillOpen(_ menu: NSMenu) {
         isMenuOpen = true
         rebuildMenu(menu)
-        if !settings.trimmedAPIKey.isEmpty {
-            Task { await apiService.refresh(apiKey: settings.apiKey) }
-        }
     }
 
     public func menuDidClose(_ menu: NSMenu) {

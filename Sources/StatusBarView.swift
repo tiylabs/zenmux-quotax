@@ -7,10 +7,15 @@ public final class StatusBarView: NSView {
         didSet { bindService() }
     }
 
+    public var settings: SettingsManager? {
+        didSet { bindService() }
+    }
+
+    private static let statusWidth: CGFloat = 104
     private var cancellables: Set<AnyCancellable> = []
 
     public override var intrinsicContentSize: NSSize {
-        NSSize(width: 104, height: NSStatusBar.system.thickness)
+        NSSize(width: Self.statusWidth, height: NSStatusBar.system.thickness)
     }
 
     public override func hitTest(_ point: NSPoint) -> NSView? {
@@ -29,78 +34,98 @@ public final class StatusBarView: NSView {
 
     private func bindService() {
         cancellables.removeAll()
-        apiService?.objectWillChange.sink { [weak self] _ in
+        let redraw: () -> Void = { [weak self] in
             DispatchQueue.main.async { self?.needsDisplay = true }
-        }.store(in: &cancellables)
+        }
+        apiService?.objectWillChange.sink { _ in redraw() }.store(in: &cancellables)
+        settings?.objectWillChange.sink { _ in redraw() }.store(in: &cancellables)
         needsDisplay = true
     }
 
     public override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        let bounds = self.bounds
-        if shouldDrawAppIcon {
-            drawAppIcon(in: bounds)
-            return
-        }
+        drawQuotaStatus(in: bounds)
+    }
 
-        let text = statusText
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = .center
-        paragraph.lineBreakMode = .byTruncatingTail
+    private func drawQuotaStatus(in bounds: NSRect) {
+        let labelX: CGFloat = 2
+        let labelWidth: CGFloat = 22
+        let valueX = labelX + labelWidth + 2
+        let valueWidth = max(0, bounds.width - valueX - 2)
+        let rowHeight: CGFloat = 10
+        let totalHeight = rowHeight * 2
+        let topY = (bounds.height + totalHeight) / 2 - rowHeight
+        let bottomY = topY - rowHeight
 
         let color: NSColor
-        if apiService?.isPaused == true {
-            color = .secondaryLabelColor
-        } else if apiService?.lastError != nil {
+        if apiService?.lastError != nil && apiService?.lastError?.type != .noAPIKey {
             color = .systemRed
+        } else if apiService?.isPaused == true {
+            color = .secondaryLabelColor
         } else {
             color = .labelColor
         }
 
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold),
-            .foregroundColor: color,
-            .paragraphStyle: paragraph
+        drawRow(label: "5H:", value: quotaText(for: apiService?.subscriptionData?.quota5Hour), labelX: labelX, labelWidth: labelWidth, valueX: valueX, valueWidth: valueWidth, y: topY, color: color)
+        drawRow(label: "7D:", value: quotaText(for: apiService?.subscriptionData?.quota7Day), labelX: labelX, labelWidth: labelWidth, valueX: valueX, valueWidth: valueWidth, y: bottomY, color: color)
+    }
+
+    private func drawRow(label: String, value: String, labelX: CGFloat, labelWidth: CGFloat, valueX: CGFloat, valueWidth: CGFloat, y: CGFloat, color: NSColor) {
+        let labelParagraph = NSMutableParagraphStyle()
+        labelParagraph.alignment = .right
+        labelParagraph.lineBreakMode = .byClipping
+
+        let valueParagraph = NSMutableParagraphStyle()
+        valueParagraph.alignment = .right
+        valueParagraph.lineBreakMode = .byTruncatingTail
+
+        let baseAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
+            .foregroundColor: color
         ]
-        let attributed = NSAttributedString(string: text, attributes: attributes)
-        let rect = NSRect(x: 0, y: (bounds.height - 16) / 2, width: bounds.width, height: 16)
-        attributed.draw(in: rect)
+
+        var labelAttributes = baseAttributes
+        labelAttributes[.paragraphStyle] = labelParagraph
+        NSAttributedString(string: label, attributes: labelAttributes)
+            .draw(in: NSRect(x: labelX, y: y, width: labelWidth, height: 10))
+
+        var valueAttributes = baseAttributes
+        valueAttributes[.paragraphStyle] = valueParagraph
+        NSAttributedString(string: value, attributes: valueAttributes)
+            .draw(in: NSRect(x: valueX, y: y, width: valueWidth, height: 10))
     }
 
-    private var shouldDrawAppIcon: Bool {
-        guard let apiService else { return true }
-        if apiService.isRefreshing { return false }
-        if apiService.lastError?.type == .noAPIKey { return true }
-        return apiService.subscriptionData?.quota5Hour?.remainingFlows == nil
-    }
-
-    private func drawAppIcon(in bounds: NSRect) {
-        let image = zenmuxAppIcon()
-        let side = min(bounds.height - 4, 18)
-        let rect = NSRect(
-            x: (bounds.width - side) / 2,
-            y: (bounds.height - side) / 2,
-            width: side,
-            height: side
-        )
-        image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
-    }
-
-    private var statusText: String {
-        guard let apiService else { return "" }
-        if apiService.isRefreshing { return "Quotax …" }
-        if apiService.isPaused { return "Quotax ⏸" }
-        if apiService.lastError != nil { return "Quotax !" }
-        if let remaining = apiService.subscriptionData?.quota5Hour?.remainingFlows {
-            return "Q \(formatNumber(remaining))"
+    private func quotaText(for quota: ZenmuxQuotaWindow?) -> String {
+        let mode = settings?.statusBarQuotaDisplayMode ?? .used
+        let percentage: Double?
+        switch mode {
+        case .used:
+            percentage = quota?.usagePercentage
+        case .left:
+            percentage = leftPercentage(for: quota)
         }
-        return ""
+        guard let percentage else { return "—" }
+        return "\(formatPercent(percentage)) \(mode.rawValue)"
     }
 
-    private func formatNumber(_ value: Double) -> String {
+    private func leftPercentage(for quota: ZenmuxQuotaWindow?) -> Double? {
+        guard let quota else { return nil }
+        if let remainingFlows = quota.remainingFlows, let maxFlows = quota.maxFlows, maxFlows > 0 {
+            return remainingFlows / maxFlows
+        }
+        if let usagePercentage = quota.usagePercentage {
+            return max(0, 1 - usagePercentage)
+        }
+        return nil
+    }
+
+    private func formatPercent(_ value: Double) -> String {
+        let percent = value * 100
+        let rounded = (percent * 100).rounded() / 100
         let formatter = NumberFormatter()
-        formatter.maximumFractionDigits = value >= 100 ? 0 : 1
         formatter.minimumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? String(value)
+        formatter.maximumFractionDigits = 2
+        formatter.numberStyle = .decimal
+        return "\(formatter.string(from: NSNumber(value: rounded)) ?? String(rounded))%"
     }
 }
