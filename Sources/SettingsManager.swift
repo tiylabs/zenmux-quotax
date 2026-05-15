@@ -32,6 +32,20 @@ public enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
+public enum StatusBarDataColorMode: String, CaseIterable, Identifiable {
+    case white
+    case black
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .white: return "White"
+        case .black: return "Black"
+        }
+    }
+}
+
 @MainActor
 public final class SettingsManager: ObservableObject {
     public static let shared = SettingsManager()
@@ -41,6 +55,7 @@ public final class SettingsManager: ObservableObject {
         static let refreshInterval = "refresh_interval"
         static let alwaysRefresh = "alwaysRefresh"
         static let statusBarQuotaDisplayMode = "statusBarQuotaDisplayMode"
+        static let statusBarDataColorMode = "statusBarDataColorMode"
         static let appearanceMode = "appearanceMode"
         static let timeZoneIdentifier = "timeZoneIdentifier"
         static let launchAtLogin = "launchAtLogin"
@@ -64,6 +79,10 @@ public final class SettingsManager: ObservableObject {
 
     @Published public var statusBarQuotaDisplayMode: StatusBarQuotaDisplayMode {
         didSet { defaults.set(statusBarQuotaDisplayMode.rawValue, forKey: Keys.statusBarQuotaDisplayMode) }
+    }
+
+    @Published public var statusBarDataColorMode: StatusBarDataColorMode {
+        didSet { defaults.set(statusBarDataColorMode.rawValue, forKey: Keys.statusBarDataColorMode) }
     }
 
     @Published public var appearanceMode: AppearanceMode {
@@ -94,6 +113,8 @@ public final class SettingsManager: ObservableObject {
         self.alwaysRefresh = defaults.object(forKey: Keys.alwaysRefresh) as? Bool ?? true
         let storedDisplayMode = defaults.string(forKey: Keys.statusBarQuotaDisplayMode) ?? StatusBarQuotaDisplayMode.used.rawValue
         self.statusBarQuotaDisplayMode = StatusBarQuotaDisplayMode(rawValue: storedDisplayMode) ?? .used
+        let storedStatusBarDataColorMode = defaults.string(forKey: Keys.statusBarDataColorMode) ?? StatusBarDataColorMode.white.rawValue
+        self.statusBarDataColorMode = StatusBarDataColorMode(rawValue: storedStatusBarDataColorMode) ?? .white
         let storedAppearanceMode = defaults.string(forKey: Keys.appearanceMode) ?? AppearanceMode.system.rawValue
         self.appearanceMode = AppearanceMode(rawValue: storedAppearanceMode) ?? .system
         let storedTimeZone = defaults.string(forKey: Keys.timeZoneIdentifier) ?? TimeZone.current.identifier

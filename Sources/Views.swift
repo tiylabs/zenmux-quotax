@@ -453,6 +453,8 @@ struct MenuContentView: View {
         .padding(12)
         .frame(width: 380)
         .background(panelBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .foregroundStyle(Color.primary)
     }
 
@@ -810,6 +812,23 @@ struct SettingsView: View {
                     .accessibilityLabel("Status bar quota")
                     .pickerStyle(.segmented)
                     .frame(width: 250)
+                }
+
+                rowDivider
+
+                settingRow(
+                    title: "Status bar color",
+                    subtitle: "Choose a fixed data color independent of app theme."
+                ) {
+                    Picker("Status bar color", selection: $settings.statusBarDataColorMode) {
+                        ForEach(StatusBarDataColorMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .accessibilityLabel("Status bar color")
+                    .pickerStyle(.segmented)
+                    .frame(width: 160)
                 }
 
                 rowDivider

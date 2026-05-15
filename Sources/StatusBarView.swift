@@ -62,10 +62,8 @@ public final class StatusBarView: NSView {
         let color: NSColor
         if apiService?.lastError != nil && apiService?.lastError?.type != .noAPIKey {
             color = .systemRed
-        } else if apiService?.isPaused == true {
-            color = .secondaryLabelColor
         } else {
-            color = .labelColor
+            color = statusBarDataColor()
         }
 
         let quota5 = quotaDisplay(for: apiService?.subscriptionData?.quota5Hour)
@@ -78,6 +76,15 @@ public final class StatusBarView: NSView {
         let rect = bounds.insetBy(dx: 1, dy: 1.5)
         NSColor.controlAccentColor.withAlphaComponent(0.08).setFill()
         NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
+    }
+
+    private func statusBarDataColor() -> NSColor {
+        switch settings?.statusBarDataColorMode ?? .white {
+        case .white:
+            return .white
+        case .black:
+            return .black
+        }
     }
 
     private func drawRow(label: String, value: String, labelX: CGFloat, labelWidth: CGFloat, valueX: CGFloat, valueWidth: CGFloat, y: CGFloat, color: NSColor) {
