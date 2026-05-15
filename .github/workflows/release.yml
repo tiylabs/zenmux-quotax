@@ -71,8 +71,8 @@ jobs:
       - name: Build app
         shell: bash
         run: |
-          chmod +x build.sh
-          ARCH="${{ matrix.arch }}" ./build.sh
+          chmod +x scripts/build.sh
+          ARCH="${{ matrix.arch }}" ./scripts/build.sh
           test -d "build/Quotax.app"
           /usr/bin/file "build/Quotax.app/Contents/MacOS/Quotax"
 
@@ -149,17 +149,12 @@ jobs:
 
           DMG_ARTIFACT_NAME="Quotax_${VERSION}_${{ matrix.artifact_arch }}.dmg"
           DMG_ARTIFACT_PATH="release-artifacts/$DMG_ARTIFACT_NAME"
-          DMG_STAGING_DIR="$RUNNER_TEMP/Quotax-dmg"
-          rm -rf "$DMG_STAGING_DIR" "$DMG_ARTIFACT_PATH"
-          mkdir -p "$DMG_STAGING_DIR"
-          ditto "build/Quotax.app" "$DMG_STAGING_DIR/Quotax.app"
-          ln -s /Applications "$DMG_STAGING_DIR/Applications"
-          hdiutil create \
-            -volname "Quotax" \
-            -srcfolder "$DMG_STAGING_DIR" \
-            -ov \
-            -format UDZO \
-            "$DMG_ARTIFACT_PATH"
+          rm -f "$DMG_ARTIFACT_PATH"
+          chmod +x scripts/create-dmg.sh
+          scripts/create-dmg.sh \
+            "$DMG_ARTIFACT_PATH" \
+            "build/Quotax.app" \
+            "Resources/DmgBackground.png"
           codesign --force \
             --timestamp \
             --sign "$APPLE_SIGNING_IDENTITY" \

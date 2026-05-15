@@ -1,0 +1,97 @@
+name: Code Reviewer Workflow
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    env:
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+    steps:
+      - name: Checkout Current Branch
+        uses: actions/checkout@v4
+
+      - name: Check LLM_API_KEY
+        if: ${{ env.LLM_API_KEY == '' }}
+        run: echo "::warning::LLM_API_KEY is not set. PR review skipped."
+
+      - name: Run Action From Current Branch
+        if: ${{ env.LLM_API_KEY != '' }}
+        uses: tiylabs/code-review-agent-action@780d8eb054b8133bdb7cfec445fd06089a82348c
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+          # Provider configuration
+          ai_provider: ${{ vars.LLM_PROVIDER_PROTOCOL }}
+          api_key: ${{ env.LLM_API_KEY }}
+          api_base: ${{ vars.LLM_API_BASE }}
+
+          # Optional planner model; defaults to gpt-5.3-codex
+          planner_model: ${{ vars.PLANNER_MODEL }}
+
+          # Optional reviewer model; defaults to gpt-5.3-codex
+          reviewer_model: ${{ vars.DEFAULT_MODEL }}
+
+          api_base_allowlist: |
+            api.openai.com
+            zenmux.ai
+            opencode.ai
+            openrouter.ai
+            tokenhub.tencentmaas.com
+            api.lkeap.cloud.tencent.com
+            api.synthetic.new
+
+          # Include files relevant to this Swift macOS app and its automation.
+          include: |
+            **/*.swift
+            **/*.plist
+            **/*.sh
+            **/*.yml
+            **/*.yaml
+            **/*.json
+            **/*.md
+            .gitignore
+            LICENSE
+
+          # Exclude generated outputs and binary/user-specific files.
+          exclude: |
+            build/**
+            **/*.xcuserstate
+            **/.DS_Store
+            **/*.log
+            **/*.zip
+            **/*.dmg
+
+          # Suggested values: general, security, performance, testing
+          review_dimensions: general,security,performance,testing
+
+          # Review language; allowed values include English, Chinese, Simplified Chinese.
+          review_language: English
+
+          # Minimum confidence to keep a finding; allowed range: 0.0 - 1.0.
+          min_finding_confidence: 0.85
+
+          # First round runs only primary dimension to reduce duplicates/cost.
+          coverage_first_round_primary_only: true
+
+          # Auto-minimize outdated historical inline comments from this action.
+          auto_minimize_outdated_comments: true
+
+          # Keep defaults close to ../tiycode while bounding cost for this smaller app.
+          max_rounds: 4
+          max_model_calls: 64
+          max_files_per_batch: 16
+          max_context_chars: 256000
+          max_findings: 64
+          max_inline_comments: 32

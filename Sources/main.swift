@@ -2,12 +2,13 @@ import AppKit
 
 @main
 @MainActor
-struct zenmux_quotaxApp {
+struct ZenmuxQuotaxApp {
     static func main() {
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
-        app.run()
-        _ = delegate
+        withExtendedLifetime(delegate) {
+            app.run()
+        }
     }
 }

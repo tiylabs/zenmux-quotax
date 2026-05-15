@@ -17,7 +17,7 @@
 Quotax 驻留在 macOS 状态栏中，让你无需打开管理后台也能查看 ZenMux 额度使用情况。它通过 ZenMux Management API 拉取订阅数据，在菜单栏显示 5 小时与 7 天额度百分比，并在紧凑面板中展示额度窗口、月度限制、刷新状态和错误信息。
 
 > [!NOTE]
-> 本仓库是源码优先项目。当前没有 Swift Package manifest 或 Xcode project；`build.sh` 会直接使用 `swiftc` 编译应用。
+> 本仓库是源码优先项目。当前没有 Swift Package manifest 或 Xcode project；`scripts/build.sh` 会直接使用 `swiftc` 编译应用。
 
 <img width="3840" height="2160" alt="image" src="https://github.com/user-attachments/assets/479144a0-24a0-49e4-b0ab-a042462eb5fe" />
 
@@ -55,19 +55,19 @@ brew upgrade quotax
 ## 构建与运行
 
 ```bash
-chmod +x build.sh
-./build.sh
+chmod +x scripts/build.sh
+./scripts/build.sh
 open build/Quotax.app
 ```
 
 指定架构构建：
 
 ```bash
-ARCH=arm64 ./build.sh
-ARCH=x86_64 ./build.sh
+ARCH=arm64 ./scripts/build.sh
+ARCH=x86_64 ./scripts/build.sh
 ```
 
-构建脚本会编译 `Sources/*.swift`，复制 `Info.plist` 与 `Resources/AppIcon.icns`，校验打包后的 plist，进行 ad-hoc 签名，并输出 `build/Quotax.app`。
+构建脚本会递归收集 `Sources/` 下的 Swift 文件，复制 `Info.plist` 与 `Resources/AppIcon.icns`，校验打包后的 plist，进行 ad-hoc 签名，并输出 `build/Quotax.app`。
 
 ## 使用方式
 
@@ -82,19 +82,27 @@ ARCH=x86_64 ./build.sh
 
 ```text
 Sources/
-  main.swift              应用入口
-  AppDelegate.swift       AppKit 生命周期、状态栏项目、菜单和设置窗口
-  AppResources.swift      应用图标与资源加载辅助逻辑
-  StatusBarView.swift     自定义菜单栏额度绘制
-  Views.swift             SwiftUI 菜单与设置界面
-  ZenmuxAPIService.swift  Management API 刷新与错误处理
-  Models.swift            订阅和额度数据模型
-  SettingsManager.swift   持久化偏好设置与登录启动配置
+  main.swift                    应用入口
+  Core/
+    AppConstants.swift          应用级常量
+    AppLog.swift                OSLog 日志分类
+    AppResources.swift          应用图标与资源加载辅助逻辑
+  Services/
+    LaunchAtLoginService.swift  登录启动集成
+    Models.swift                订阅和额度数据模型
+    SettingsManager.swift       持久化偏好设置
+    ZenmuxAPIClient.swift       底层 Management API 客户端
+    ZenmuxAPIService.swift      刷新状态与错误处理
+  UI/
+    AppDelegate.swift           AppKit 生命周期、状态栏项目、菜单和设置窗口
+    StatusBarView.swift         自定义菜单栏额度绘制
+    Views.swift                 SwiftUI 菜单与设置界面
 Resources/
-  AppIcon.icns            应用图标
-Info.plist                Bundle 元数据与 macOS 设置
-build.sh                  直接调用 swiftc 的构建脚本
-.github/workflows/        Release 构建、签名、公证和上传流程
+  AppIcon.icns                  应用图标
+Info.plist                      Bundle 元数据与 macOS 设置
+scripts/
+  build.sh                      直接调用 swiftc 的构建脚本
+.github/workflows/              Release 构建、签名、公证和上传流程
 ```
 
 ## 工作原理
@@ -114,11 +122,35 @@ flowchart LR
 
 `AppDelegate` 创建状态栏项目、启动自动刷新，并在缺少 API Key 时打开设置窗口。`ZenmuxAPIService` 发起带认证的 API 请求，并发布订阅数据、加载状态和用户可读的错误信息。界面组件观察服务与设置状态，并据此重绘菜单栏和菜单面板。
 
+## Debug 日志
+
+Quotax 使用 macOS Unified Logging（`OSLog`），不会写入自定义日志文件。日志 subsystem 是 `com.zenmux.quotax`，常见 category 包括 `lifecycle`、`network`、`refresh`、`decode` 和 `settings`。
+
+复现问题时实时查看日志：
+
+```bash
+log stream --predicate 'subsystem == "com.zenmux.quotax"' --info --debug
+```
+
+查看最近一段时间的历史日志：
+
+```bash
+log show --predicate 'subsystem == "com.zenmux.quotax"' --last 1h
+```
+
+只查看网络相关日志：
+
+```bash
+log stream --predicate 'subsystem == "com.zenmux.quotax" && category == "network"' --info --debug
+```
+
+`URLError.cancelled` / `-999 cancelled` 通常表示进行中的刷新请求被新的刷新或应用关闭主动取消。除非后续伴随 crash 或 terminate 日志，否则应将它视为取消信号，而不是致命网络错误。
+
 ## 开发说明
 
 - 保持 Swift 文件职责清晰，并沿用当前四空格缩进风格。
 - 当前 UI 协调逻辑运行在 main actor 上；涉及 AppKit 或 SwiftUI 共享状态时应保留 `@MainActor`。
-- 目前没有自动化测试目标。修改后请运行 `./build.sh`，并手动验证状态栏项目、设置窗口、API Key 持久化、刷新行为和错误提示。
+- 目前没有自动化测试目标。修改后请运行 `./scripts/build.sh`，并手动验证状态栏项目、设置窗口、API Key 持久化、刷新行为和错误提示。
 
 ## 发布
 

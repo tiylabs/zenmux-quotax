@@ -17,7 +17,7 @@
 Quotax sits in the macOS status bar and keeps ZenMux quota usage visible without opening the management portal. It fetches subscription data from the ZenMux Management API, displays 5-hour and 7-day quota percentages in the menu bar, and provides a compact detail panel for quota windows, monthly limits, refresh status, and errors.
 
 > [!NOTE]
-> This repository is source-first. There is no Swift Package manifest or Xcode project; `build.sh` compiles the app directly with `swiftc`.
+> This repository is source-first. There is no Swift Package manifest or Xcode project; `scripts/build.sh` compiles the app directly with `swiftc`.
 
 <img width="3840" height="2160" alt="image" src="https://github.com/user-attachments/assets/479144a0-24a0-49e4-b0ab-a042462eb5fe" />
 
@@ -55,19 +55,19 @@ brew upgrade quotax
 ## Build and Run
 
 ```bash
-chmod +x build.sh
-./build.sh
+chmod +x scripts/build.sh
+./scripts/build.sh
 open build/Quotax.app
 ```
 
 To build for a specific architecture:
 
 ```bash
-ARCH=arm64 ./build.sh
-ARCH=x86_64 ./build.sh
+ARCH=arm64 ./scripts/build.sh
+ARCH=x86_64 ./scripts/build.sh
 ```
 
-The build script compiles `Sources/*.swift`, copies `Info.plist` and `Resources/AppIcon.icns`, lints the packaged plist, ad-hoc signs the app, and writes `build/Quotax.app`.
+The build script recursively collects Swift files under `Sources/`, copies `Info.plist` and `Resources/AppIcon.icns`, lints the packaged plist, ad-hoc signs the app, and writes `build/Quotax.app`.
 
 ## Usage
 
@@ -82,19 +82,27 @@ Preferences include auto refresh, refresh interval, launch at login, status bar 
 
 ```text
 Sources/
-  main.swift              App entry point
-  AppDelegate.swift       AppKit lifecycle, status item, menus, settings window
-  AppResources.swift      App icon and resource loading helper
-  StatusBarView.swift     Custom menu bar quota drawing
-  Views.swift             SwiftUI menu and settings UI
-  ZenmuxAPIService.swift  Management API refresh and error handling
-  Models.swift            Decodable subscription/quota models
-  SettingsManager.swift   Persisted preferences and launch-at-login setup
+  main.swift                    App entry point
+  Core/
+    AppConstants.swift          App-wide constants
+    AppLog.swift                OSLog categories
+    AppResources.swift          App icon and resource loading helper
+  Services/
+    LaunchAtLoginService.swift  Launch-at-login integration
+    Models.swift                Decodable subscription/quota models
+    SettingsManager.swift       Persisted preferences
+    ZenmuxAPIClient.swift       Low-level Management API client
+    ZenmuxAPIService.swift      Refresh state and error handling
+  UI/
+    AppDelegate.swift           AppKit lifecycle, status item, menus, settings window
+    StatusBarView.swift         Custom menu bar quota drawing
+    Views.swift                 SwiftUI menu and settings UI
 Resources/
-  AppIcon.icns            App icon
-Info.plist                Bundle metadata and macOS settings
-build.sh                  Direct swiftc build script
-.github/workflows/        Release build, signing, notarization, and upload workflow
+  AppIcon.icns                  App icon
+Info.plist                      Bundle metadata and macOS settings
+scripts/
+  build.sh                      Direct swiftc build script
+.github/workflows/              Release build, signing, notarization, and upload workflow
 ```
 
 ## How It Works
@@ -114,11 +122,35 @@ flowchart LR
 
 `AppDelegate` creates the status item, starts auto refresh, and opens settings when no API key exists. `ZenmuxAPIService` performs authenticated API requests and publishes subscription data, loading state, and user-readable errors. UI components observe the service and settings to redraw the menu bar and menu panel.
 
+## Debugging Logs
+
+Quotax uses macOS Unified Logging through `OSLog`; it does not write a custom log file. The logging subsystem is `com.zenmux.quotax`, with categories such as `lifecycle`, `network`, `refresh`, `decode`, and `settings`.
+
+Stream live logs while reproducing an issue:
+
+```bash
+log stream --predicate 'subsystem == "com.zenmux.quotax"' --info --debug
+```
+
+Inspect recent historical logs:
+
+```bash
+log show --predicate 'subsystem == "com.zenmux.quotax"' --last 1h
+```
+
+Filter network-only logs:
+
+```bash
+log stream --predicate 'subsystem == "com.zenmux.quotax" && category == "network"' --info --debug
+```
+
+`URLError.cancelled` / `-999 cancelled` usually means an in-flight refresh request was intentionally cancelled by a newer refresh or app shutdown. Treat it as a cancellation signal instead of a fatal network failure unless it is followed by crash or termination logs.
+
 ## Development Notes
 
 - Keep Swift files focused by responsibility and follow the existing four-space indentation style.
 - UI coordination currently runs on the main actor; preserve `@MainActor` where state is shared with AppKit or SwiftUI.
-- There is no automated test target yet. For changes, run `./build.sh` and manually verify the status item, settings, API key persistence, refresh behavior, and error messages.
+- There is no automated test target yet. For changes, run `./scripts/build.sh` and manually verify the status item, settings, API key persistence, refresh behavior, and error messages.
 
 ## Releases
 

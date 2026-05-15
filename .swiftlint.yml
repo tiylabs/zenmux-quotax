@@ -1,0 +1,33 @@
+included:
+  - Sources
+
+excluded:
+  - build
+
+line_length:
+  warning: 160
+  error: 220
+  ignores_comments: true
+  ignores_urls: true
+
+identifier_name:
+  min_length:
+    warning: 2
+  excluded:
+    - id
+    - x
+    - y
+
+function_body_length:
+  warning: 120
+  error: 200
+
+type_body_length:
+  warning: 300
+  error: 500
+
+file_length:
+  warning: 900
+  error: 1200
+
+reporter: github-actions-logging

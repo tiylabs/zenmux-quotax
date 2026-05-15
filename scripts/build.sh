@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="Quotax"
 BUILD_DIR="$ROOT/build"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"
@@ -14,7 +14,10 @@ ARCH="${ARCH:-$(uname -m)}"
 rm -rf "$BUILD_DIR"
 mkdir -p "$MACOS" "$RESOURCES"
 
-SWIFT_FILES=("$ROOT"/Sources/*.swift)
+SWIFT_FILES=()
+while IFS= read -r -d '' swift_file; do
+  SWIFT_FILES+=("$swift_file")
+done < <(find "$ROOT/Sources" -name '*.swift' -print0 | sort -z)
 /usr/bin/swiftc \
   -target "$ARCH-apple-macosx15.7" \
   -parse-as-library \

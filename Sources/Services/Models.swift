@@ -54,7 +54,16 @@ public struct ZenmuxSubscriptionData: Decodable {
         case accountStatus = "account_status"
     }
 
-    public init(plan: ZenmuxPlan? = nil, currency: String? = nil, baseUSDPerFlow: Double? = nil, effectiveUSDPerFlow: Double? = nil, quotaMonthly: ZenmuxQuotaMonthly? = nil, quota5Hour: ZenmuxQuotaWindow? = nil, quota7Day: ZenmuxQuotaWindow? = nil, accountStatus: String? = nil) {
+    public init(
+        plan: ZenmuxPlan? = nil,
+        currency: String? = nil,
+        baseUSDPerFlow: Double? = nil,
+        effectiveUSDPerFlow: Double? = nil,
+        quotaMonthly: ZenmuxQuotaMonthly? = nil,
+        quota5Hour: ZenmuxQuotaWindow? = nil,
+        quota7Day: ZenmuxQuotaWindow? = nil,
+        accountStatus: String? = nil
+    ) {
         self.plan = plan
         self.currency = currency
         self.baseUSDPerFlow = baseUSDPerFlow
@@ -174,11 +183,13 @@ public struct ZenmuxAPIError: LocalizedError, Identifiable, Equatable {
     public let type: ZenmuxAPIErrorType
     public let statusCode: Int?
     public let message: String
+    public let diagnosticMessage: String?
 
-    public init(_ type: ZenmuxAPIErrorType, statusCode: Int? = nil, message: String? = nil) {
+    public init(_ type: ZenmuxAPIErrorType, statusCode: Int? = nil, message: String? = nil, diagnosticMessage: String? = nil) {
         self.type = type
         self.statusCode = statusCode
         self.message = message ?? type.rawValue
+        self.diagnosticMessage = diagnosticMessage
     }
 
     public var errorDescription: String? {
@@ -200,7 +211,18 @@ public struct ZenmuxAPIError: LocalizedError, Identifiable, Equatable {
     }
 
     public static func == (lhs: ZenmuxAPIError, rhs: ZenmuxAPIError) -> Bool {
-        lhs.type == rhs.type && lhs.statusCode == rhs.statusCode && lhs.message == rhs.message
+        lhs.type == rhs.type && lhs.statusCode == rhs.statusCode && lhs.message == rhs.message && lhs.diagnosticMessage == rhs.diagnosticMessage
+    }
+
+    public static func diagnosticDescription(for error: DecodingError) -> String {
+        switch error {
+        case .typeMismatch(_, let context), .valueNotFound(_, let context), .keyNotFound(_, let context), .dataCorrupted(let context):
+            let path = context.codingPath.map(\.stringValue).joined(separator: ".")
+            let location = path.isEmpty ? "<root>" : path
+            return "\(context.debugDescription) at \(location)"
+        @unknown default:
+            return String(describing: error)
+        }
     }
 }
 
@@ -218,13 +240,6 @@ extension KeyedDecodingContainer {
         return nil
     }
 
-    func decodeFlexibleStringIfPresent(forKeys keys: [Key]) throws -> String? {
-        for key in keys {
-            if let value = try decodeFlexibleStringIfPresent(forKey: key) { return value }
-        }
-        return nil
-    }
-
     func decodeFlexibleIntIfPresent(forKey key: Key) throws -> Int? {
         if let value = try? decodeIfPresent(Int.self, forKey: key) { return value }
         if let value = try? decodeIfPresent(Double.self, forKey: key) { return Int(value) }
@@ -232,24 +247,10 @@ extension KeyedDecodingContainer {
         return nil
     }
 
-    func decodeFlexibleIntIfPresent(forKeys keys: [Key]) throws -> Int? {
-        for key in keys {
-            if let value = try decodeFlexibleIntIfPresent(forKey: key) { return value }
-        }
-        return nil
-    }
-
     func decodeFlexibleDoubleIfPresent(forKey key: Key) throws -> Double? {
         if let value = try? decodeIfPresent(Double.self, forKey: key) { return value }
         if let value = try? decodeIfPresent(Int.self, forKey: key) { return Double(value) }
         if let value = try? decodeIfPresent(String.self, forKey: key) { return Double(value.trimmingCharacters(in: .whitespacesAndNewlines)) }
-        return nil
-    }
-
-    func decodeFlexibleDoubleIfPresent(forKeys keys: [Key]) throws -> Double? {
-        for key in keys {
-            if let value = try decodeFlexibleDoubleIfPresent(forKey: key) { return value }
-        }
         return nil
     }
 }
