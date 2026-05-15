@@ -71,8 +71,8 @@ jobs:
       - name: Build app
         shell: bash
         run: |
-          chmod +x build.sh
-          ARCH="${{ matrix.arch }}" ./build.sh
+          chmod +x scripts/build.sh
+          ARCH="${{ matrix.arch }}" ./scripts/build.sh
           test -d "build/Quotax.app"
           /usr/bin/file "build/Quotax.app/Contents/MacOS/Quotax"
 
