@@ -13,6 +13,11 @@ This repository contains a lightweight macOS menu bar app named Quotax. Swift so
 
 There is currently no package manager command or automated test target.
 
+## Debugging & Logs
+Quotax uses macOS Unified Logging via `OSLog` and does not write custom log files. The subsystem is `com.zenmux.quotax`; categories are defined in `Sources/Core/AppLog.swift` and currently include `lifecycle`, `network`, `refresh`, `decode`, and `settings`.
+
+Use `log stream --predicate 'subsystem == "com.zenmux.quotax"' --info --debug` to watch live logs while reproducing an issue. Use `log show --predicate 'subsystem == "com.zenmux.quotax"' --last 1h` to inspect historical logs, and add `&& category == "network"` to focus on API traffic. `URLError.cancelled` / `-999 cancelled` is normally a cancellation signal from a superseded refresh or shutdown path and should not be treated as fatal unless followed by crash or termination logs.
+
 ## Coding Style & Naming Conventions
 Follow the existing Swift style: four-space indentation, `PascalCase` for types, `camelCase` for properties and methods, and descriptive file names tied to one responsibility. Keep UI coordination on the main actor where appropriate; current app-level types use `@MainActor` and observable state. Preserve explicit access control (`public`, `private`) and prefer focused files over expanding unrelated classes.
 

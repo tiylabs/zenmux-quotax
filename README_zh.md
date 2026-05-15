@@ -122,6 +122,30 @@ flowchart LR
 
 `AppDelegate` 创建状态栏项目、启动自动刷新，并在缺少 API Key 时打开设置窗口。`ZenmuxAPIService` 发起带认证的 API 请求，并发布订阅数据、加载状态和用户可读的错误信息。界面组件观察服务与设置状态，并据此重绘菜单栏和菜单面板。
 
+## Debug 日志
+
+Quotax 使用 macOS Unified Logging（`OSLog`），不会写入自定义日志文件。日志 subsystem 是 `com.zenmux.quotax`，常见 category 包括 `lifecycle`、`network`、`refresh`、`decode` 和 `settings`。
+
+复现问题时实时查看日志：
+
+```bash
+log stream --predicate 'subsystem == "com.zenmux.quotax"' --info --debug
+```
+
+查看最近一段时间的历史日志：
+
+```bash
+log show --predicate 'subsystem == "com.zenmux.quotax"' --last 1h
+```
+
+只查看网络相关日志：
+
+```bash
+log stream --predicate 'subsystem == "com.zenmux.quotax" && category == "network"' --info --debug
+```
+
+`URLError.cancelled` / `-999 cancelled` 通常表示进行中的刷新请求被新的刷新或应用关闭主动取消。除非后续伴随 crash 或 terminate 日志，否则应将它视为取消信号，而不是致命网络错误。
+
 ## 开发说明
 
 - 保持 Swift 文件职责清晰，并沿用当前四空格缩进风格。

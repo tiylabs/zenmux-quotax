@@ -122,6 +122,30 @@ flowchart LR
 
 `AppDelegate` creates the status item, starts auto refresh, and opens settings when no API key exists. `ZenmuxAPIService` performs authenticated API requests and publishes subscription data, loading state, and user-readable errors. UI components observe the service and settings to redraw the menu bar and menu panel.
 
+## Debugging Logs
+
+Quotax uses macOS Unified Logging through `OSLog`; it does not write a custom log file. The logging subsystem is `com.zenmux.quotax`, with categories such as `lifecycle`, `network`, `refresh`, `decode`, and `settings`.
+
+Stream live logs while reproducing an issue:
+
+```bash
+log stream --predicate 'subsystem == "com.zenmux.quotax"' --info --debug
+```
+
+Inspect recent historical logs:
+
+```bash
+log show --predicate 'subsystem == "com.zenmux.quotax"' --last 1h
+```
+
+Filter network-only logs:
+
+```bash
+log stream --predicate 'subsystem == "com.zenmux.quotax" && category == "network"' --info --debug
+```
+
+`URLError.cancelled` / `-999 cancelled` usually means an in-flight refresh request was intentionally cancelled by a newer refresh or app shutdown. Treat it as a cancellation signal instead of a fatal network failure unless it is followed by crash or termination logs.
+
 ## Development Notes
 
 - Keep Swift files focused by responsibility and follow the existing four-space indentation style.
