@@ -28,7 +28,7 @@ jobs:
 
       - name: Run Action From Current Branch
         if: ${{ env.LLM_API_KEY != '' }}
-        uses: tiylabs/code-review-agent-action@v3
+        uses: tiylabs/code-review-agent-action@780d8eb054b8133bdb7cfec445fd06089a82348c
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 

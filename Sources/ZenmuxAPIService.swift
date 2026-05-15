@@ -167,6 +167,9 @@ public final class ZenmuxAPIService: ObservableObject {
         guard nanoseconds.isFinite, nanoseconds > 0 else {
             return UInt64(AppConstants.Refresh.minimumInterval * 1_000_000_000)
         }
-        return UInt64(min(nanoseconds, Double(UInt64.max)))
+        if nanoseconds >= Double(UInt64.max) {
+            return UInt64.max
+        }
+        return UInt64(nanoseconds)
     }
 }
