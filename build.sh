@@ -18,7 +18,7 @@ SWIFT_FILES=("$ROOT"/Sources/*.swift)
 /usr/bin/swiftc \
   -target "$ARCH-apple-macosx15.7" \
   -parse-as-library \
-  -module-name zenmux_monitor \
+  -module-name zenmux_quotax \
   -O \
   -framework AppKit \
   -framework SwiftUI \

@@ -1,7 +1,5 @@
 # Quotax
 
-[English](README.md) · [简体中文](README_zh.md)
-
 <p align="center">
   <strong>一个轻量级 macOS 菜单栏应用，用于监控 ZenMux 订阅额度。</strong>
 </p>
@@ -10,6 +8,10 @@
   <img alt="Swift" src="https://img.shields.io/badge/Swift-AppKit%20%2B%20SwiftUI-orange?style=flat-square">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-15.7%2B-blue?style=flat-square">
   <img alt="Build" src="https://img.shields.io/badge/build-source--first-lightgrey?style=flat-square">
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> · <a href="README_zh.md">简体中文</a>
 </p>
 
 Quotax 驻留在 macOS 状态栏中，让你无需打开管理后台也能查看 ZenMux 额度使用情况。它通过 ZenMux Management API 拉取订阅数据，在菜单栏显示 5 小时与 7 天额度百分比，并在紧凑面板中展示额度窗口、月度限制、刷新状态和错误信息。

@@ -2,7 +2,7 @@ import AppKit
 
 @main
 @MainActor
-struct zenmux_monitorApp {
+struct zenmux_quotaxApp {
     static func main() {
         let app = NSApplication.shared
         let delegate = AppDelegate()

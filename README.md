@@ -1,7 +1,5 @@
 # Quotax
 
-[English](README.md) · [简体中文](README_zh.md)
-
 <p align="center">
   <strong>A lightweight macOS menu bar monitor for ZenMux subscription quotas.</strong>
 </p>
@@ -10,6 +8,10 @@
   <img alt="Swift" src="https://img.shields.io/badge/Swift-AppKit%20%2B%20SwiftUI-orange?style=flat-square">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-15.7%2B-blue?style=flat-square">
   <img alt="Build" src="https://img.shields.io/badge/build-source--first-lightgrey?style=flat-square">
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> · <a href="README_zh.md">简体中文</a>
 </p>
 
 Quotax sits in the macOS status bar and keeps ZenMux quota usage visible without opening the management portal. It fetches subscription data from the ZenMux Management API, displays 5-hour and 7-day quota percentages in the menu bar, and provides a compact detail panel for quota windows, monthly limits, refresh status, and errors.
