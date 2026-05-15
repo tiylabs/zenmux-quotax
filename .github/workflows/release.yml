@@ -131,16 +131,56 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "build/Quotax.app"
           codesign --display --verbose=2 "build/Quotax.app"
 
-      - name: Prepare notarization archive
+      - name: Package app
         shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           mkdir -p release-artifacts
-          NOTARY_ARTIFACT_PATH="$RUNNER_TEMP/Quotax_${VERSION}_${{ matrix.artifact_arch }}-notary.zip"
-          ditto -c -k --keepParent "build/Quotax.app" "$NOTARY_ARTIFACT_PATH"
-          echo "NOTARY_ARTIFACT_PATH=$NOTARY_ARTIFACT_PATH" >> "$GITHUB_ENV"
 
-      - name: Submit notarization
+          ZIP_ARTIFACT_NAME="Quotax_${VERSION}_${{ matrix.artifact_arch }}.zip"
+          ZIP_ARTIFACT_PATH="release-artifacts/$ZIP_ARTIFACT_NAME"
+          rm -f "$ZIP_ARTIFACT_PATH"
+          ditto -c -k --keepParent "build/Quotax.app" "$ZIP_ARTIFACT_PATH"
+
+          DMG_ARTIFACT_NAME="Quotax_${VERSION}_${{ matrix.artifact_arch }}.dmg"
+          DMG_ARTIFACT_PATH="release-artifacts/$DMG_ARTIFACT_NAME"
+          DMG_STAGING_DIR="$RUNNER_TEMP/Quotax-dmg"
+          rm -rf "$DMG_STAGING_DIR" "$DMG_ARTIFACT_PATH"
+          mkdir -p "$DMG_STAGING_DIR"
+          ditto "build/Quotax.app" "$DMG_STAGING_DIR/Quotax.app"
+          ln -s /Applications "$DMG_STAGING_DIR/Applications"
+          hdiutil create \
+            -volname "Quotax" \
+            -srcfolder "$DMG_STAGING_DIR" \
+            -ov \
+            -format UDZO \
+            "$DMG_ARTIFACT_PATH"
+          codesign --force \
+            --timestamp \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            "$DMG_ARTIFACT_PATH"
+          codesign --verify --verbose=2 "$DMG_ARTIFACT_PATH"
+
+          ls -la release-artifacts
+          echo "ARTIFACT_NAME=$ZIP_ARTIFACT_NAME" >> "$GITHUB_ENV"
+          echo "ARTIFACT_PATH=$ZIP_ARTIFACT_PATH" >> "$GITHUB_ENV"
+          echo "ZIP_ARTIFACT_NAME=$ZIP_ARTIFACT_NAME" >> "$GITHUB_ENV"
+          echo "ZIP_ARTIFACT_PATH=$ZIP_ARTIFACT_PATH" >> "$GITHUB_ENV"
+          echo "DMG_ARTIFACT_NAME=$DMG_ARTIFACT_NAME" >> "$GITHUB_ENV"
+          echo "DMG_ARTIFACT_PATH=$DMG_ARTIFACT_PATH" >> "$GITHUB_ENV"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: release-artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Submit DMG notarization (async)
         shell: bash
+        continue-on-error: true
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
@@ -151,36 +191,11 @@ jobs:
             exit 1
           fi
 
-          xcrun notarytool submit "$NOTARY_ARTIFACT_PATH" \
+          echo "Submitting $DMG_ARTIFACT_PATH for notarization asynchronously..."
+          xcrun notarytool submit "$DMG_ARTIFACT_PATH" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --wait
-
-      - name: Staple notarization ticket
-        shell: bash
-        run: |
-          xcrun stapler staple "build/Quotax.app"
-          xcrun stapler validate "build/Quotax.app"
-
-      - name: Package app
-        shell: bash
-        run: |
-          ARTIFACT_NAME="Quotax_${VERSION}_${{ matrix.artifact_arch }}.zip"
-          ARTIFACT_PATH="release-artifacts/$ARTIFACT_NAME"
-          rm -f "$ARTIFACT_PATH"
-          ditto -c -k --keepParent "build/Quotax.app" "$ARTIFACT_PATH"
-          ls -la release-artifacts
-          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> "$GITHUB_ENV"
-          echo "ARTIFACT_PATH=$ARTIFACT_PATH" >> "$GITHUB_ENV"
-
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: release-artifacts/*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            --team-id "$APPLE_TEAM_ID"
 
       - name: Save artifacts for later use
         uses: actions/upload-artifact@v4
