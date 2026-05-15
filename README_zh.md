@@ -19,6 +19,8 @@ Quotax 驻留在 macOS 状态栏中，让你无需打开管理后台也能查看
 > [!NOTE]
 > 本仓库是源码优先项目。当前没有 Swift Package manifest 或 Xcode project；`build.sh` 会直接使用 `swiftc` 编译应用。
 
+<img width="3840" height="2160" alt="image" src="https://github.com/user-attachments/assets/479144a0-24a0-49e4-b0ab-a042462eb5fe" />
+
 ## 功能特性
 
 - 在 macOS 菜单栏直接显示 5 小时与 7 天额度百分比。

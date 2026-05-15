@@ -19,6 +19,8 @@ Quotax sits in the macOS status bar and keeps ZenMux quota usage visible without
 > [!NOTE]
 > This repository is source-first. There is no Swift Package manifest or Xcode project; `build.sh` compiles the app directly with `swiftc`.
 
+<img width="3840" height="2160" alt="image" src="https://github.com/user-attachments/assets/479144a0-24a0-49e4-b0ab-a042462eb5fe" />
+
 ## Features
 
 - Shows 5-hour and 7-day quota percentages directly in the macOS menu bar.
