@@ -151,16 +151,6 @@ public final class ZenmuxAPIService: ObservableObject {
         AppLog.refresh.info("Auto refresh stopped")
     }
 
-    public func pause() {
-        isPaused = true
-        AppLog.refresh.debug("Refresh paused")
-    }
-
-    public func resume() {
-        isPaused = false
-        AppLog.refresh.debug("Refresh resumed")
-    }
-
     private static func sleepNanoseconds(for interval: TimeInterval) -> UInt64 {
         let seconds = AppConstants.Refresh.normalizedInterval(interval)
         let nanoseconds = seconds * 1_000_000_000

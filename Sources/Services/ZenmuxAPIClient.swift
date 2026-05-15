@@ -78,6 +78,10 @@ public struct ZenmuxAPIClient: Sendable {
         } catch let apiError as ZenmuxAPIError {
             throw apiError
         } catch let urlError as URLError {
+            if urlError.code == .cancelled {
+                AppLog.network.debug("Subscription request URL cancelled: \(urlError.code.rawValue, privacy: .public) \(urlError.localizedDescription, privacy: .public)")
+                throw CancellationError()
+            }
             AppLog.network.error("Subscription request URL error: \(urlError.code.rawValue, privacy: .public) \(urlError.localizedDescription, privacy: .public)")
             throw ZenmuxAPIError(.networkError, message: urlError.localizedDescription, diagnosticMessage: "URLError code: \(urlError.code.rawValue)")
         } catch {
@@ -89,6 +93,10 @@ public struct ZenmuxAPIClient: Sendable {
     private static func responseSnippet(from data: Data) -> String? {
         guard !data.isEmpty else { return nil }
         let prefix = data.prefix(AppConstants.Network.responseSnippetLimit)
-        return String(data: prefix, encoding: .utf8)
+        if let utf8Snippet = String(data: prefix, encoding: .utf8) {
+            return utf8Snippet
+        }
+        let hexSnippet = prefix.map { String(format: "%02x", $0) }.joined(separator: " ")
+        return "<non-UTF8 body hex: \(hexSnippet)>"
     }
 }
