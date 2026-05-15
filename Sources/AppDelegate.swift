@@ -1,19 +1,29 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
-public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
+public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     public var statusItem: NSStatusItem?
     public var statusView: StatusBarView?
     public var settingsWindow: NSWindow?
+    public var menuPanel: NSPanel?
     public var isMenuOpen = false
     public let apiService = ZenmuxAPIService()
     public let settings = SettingsManager.shared
 
+    private let menuWidth: CGFloat = 380
     private var menuHost: NSHostingView<MenuContentView>?
+    private var appearanceCancellable: AnyCancellable?
+    private var localEventMonitor: Any?
+    private var globalEventMonitor: Any?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        applyAppearanceMode(settings.appearanceMode)
+        appearanceCancellable = settings.$appearanceMode.sink { [weak self] mode in
+            self?.applyAppearanceMode(mode)
+        }
         settings.refreshLaunchAtLoginStatus()
         setupApplicationMenu()
         setupStatusItem()
@@ -27,6 +37,27 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    private func applyAppearanceMode(_ mode: AppearanceMode) {
+        let appearance: NSAppearance?
+        switch mode {
+        case .system:
+            appearance = nil
+        case .light:
+            appearance = NSAppearance(named: .aqua)
+        case .dark:
+            appearance = NSAppearance(named: .darkAqua)
+        }
+
+        NSApp.appearance = appearance
+        settingsWindow?.appearance = appearance
+        menuPanel?.appearance = appearance
+        menuHost?.appearance = appearance
+        menuHost?.needsLayout = true
+        statusItem?.button?.appearance = appearance
+        statusView?.appearance = appearance
+        statusView?.needsDisplay = true
     }
 
     private func setupApplicationMenu() {
@@ -58,6 +89,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
         view.settings = settings
         item.button?.title = ""
         item.button?.image = nil
+        item.button?.target = self
+        item.button?.action = #selector(toggleMenuPanel)
+        item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         item.button?.addSubview(view)
         view.translatesAutoresizingMaskIntoConstraints = false
         if let button = item.button {
@@ -68,21 +102,65 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
                 view.bottomAnchor.constraint(equalTo: button.bottomAnchor)
             ])
         }
-        item.menu = buildMenu()
         statusItem = item
         statusView = view
     }
 
-    private func buildMenu() -> NSMenu {
-        let menu = NSMenu(title: "Quotax")
-        menu.delegate = self
-        menu.autoenablesItems = false
-        rebuildMenu(menu)
-        return menu
+    @objc private func toggleMenuPanel() {
+        if isMenuOpen {
+            closeMenuPanel()
+        } else {
+            openMenuPanel()
+        }
     }
 
-    private func rebuildMenu(_ menu: NSMenu) {
-        menu.removeAllItems()
+    private func openMenuPanel() {
+        guard !isMenuOpen, menuPanel == nil else { return }
+        guard let button = statusItem?.button else { return }
+        let host = makeMenuHost()
+        let fittingSize = host.fittingSize
+        let panelHeight = max(fittingSize.height, 180)
+        host.frame = NSRect(x: 0, y: 0, width: menuWidth, height: panelHeight)
+
+        let panel = NSPanel(
+            contentRect: host.frame,
+            styleMask: [.nonactivatingPanel, .borderless],
+            backing: .buffered,
+            defer: false
+        )
+        panel.appearance = NSApp.appearance
+        panel.contentView = host
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = true
+        panel.level = .popUpMenu
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        panel.hidesOnDeactivate = false
+
+        if let screenFrame = button.window?.screen?.visibleFrame, let buttonFrame = button.window?.convertToScreen(button.frame) {
+            let originX = min(max(buttonFrame.midX - menuWidth / 2, screenFrame.minX + 8), screenFrame.maxX - menuWidth - 8)
+            let originY = buttonFrame.minY - panelHeight - 6
+            panel.setFrameOrigin(NSPoint(x: originX, y: originY))
+        } else if let screenFrame = NSScreen.main?.visibleFrame {
+            panel.setFrameOrigin(NSPoint(x: screenFrame.midX - menuWidth / 2, y: screenFrame.maxY - panelHeight - 32))
+        }
+        host.layoutSubtreeIfNeeded()
+
+        menuPanel = panel
+        isMenuOpen = true
+        installMenuPanelEventMonitors()
+        panel.orderFrontRegardless()
+    }
+
+    private func closeMenuPanel() {
+        menuPanel?.orderOut(nil)
+        menuPanel = nil
+        menuHost = nil
+        isMenuOpen = false
+        removeMenuPanelEventMonitors()
+    }
+
+    private func makeMenuHost() -> NSHostingView<MenuContentView> {
         let view = MenuContentView(
             apiService: apiService,
             settings: settings,
@@ -90,28 +168,54 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
                 guard let self else { return }
                 Task { await self.apiService.refresh(apiKey: self.settings.apiKey) }
             },
-            onOpenSettings: { [weak self] in self?.openSettings() },
+            onOpenSettings: { [weak self] in
+                self?.closeMenuPanel()
+                self?.openSettings()
+            },
             onOpenManagement: { [weak self] in self?.openManagementPortal() },
             onQuit: { [weak self] in self?.quitApp() }
         )
         let host = NSHostingView(rootView: view)
-        let menuWidth: CGFloat = 380
+        host.appearance = NSApp.appearance
+        host.wantsLayer = true
+        host.layer?.backgroundColor = NSColor.clear.cgColor
         host.frame = NSRect(x: 0, y: 0, width: menuWidth, height: 1)
         host.layoutSubtreeIfNeeded()
-        host.frame = NSRect(x: 0, y: 0, width: menuWidth, height: max(host.fittingSize.height, 180))
-        let item = NSMenuItem()
-        item.view = host
-        menu.addItem(item)
         menuHost = host
+        return host
     }
 
-    public func menuWillOpen(_ menu: NSMenu) {
-        isMenuOpen = true
-        rebuildMenu(menu)
+    private func installMenuPanelEventMonitors() {
+        removeMenuPanelEventMonitors()
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
+            guard let self else { return event }
+            if event.type == .keyDown, event.keyCode == 53 {
+                self.closeMenuPanel()
+                return nil
+            }
+            if let panel = self.menuPanel, event.window === panel {
+                return event
+            }
+            if event.window === self.statusItem?.button?.window {
+                return event
+            }
+            self.closeMenuPanel()
+            return event
+        }
+        globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            Task { @MainActor in self?.closeMenuPanel() }
+        }
     }
 
-    public func menuDidClose(_ menu: NSMenu) {
-        isMenuOpen = false
+    private func removeMenuPanelEventMonitors() {
+        if let localEventMonitor {
+            NSEvent.removeMonitor(localEventMonitor)
+            self.localEventMonitor = nil
+        }
+        if let globalEventMonitor {
+            NSEvent.removeMonitor(globalEventMonitor)
+            self.globalEventMonitor = nil
+        }
     }
 
     @objc public func openSettings() {
@@ -134,6 +238,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
         let hosting = NSHostingController(rootView: content)
         let window = NSWindow(contentViewController: hosting)
         window.title = "Quotax Settings"
+        window.appearance = NSApp.appearance
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -150,6 +255,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
     }
 
     @objc public func quitApp() {
+        closeMenuPanel()
+        settingsWindow?.close()
         apiService.stopAutoRefresh()
         NSApp.terminate(nil)
     }

@@ -16,6 +16,22 @@ public enum StatusBarQuotaDisplayMode: String, CaseIterable, Identifiable {
     }
 }
 
+public enum AppearanceMode: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .system: return "Auto"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+}
+
 @MainActor
 public final class SettingsManager: ObservableObject {
     public static let shared = SettingsManager()
@@ -25,6 +41,7 @@ public final class SettingsManager: ObservableObject {
         static let refreshInterval = "refresh_interval"
         static let alwaysRefresh = "alwaysRefresh"
         static let statusBarQuotaDisplayMode = "statusBarQuotaDisplayMode"
+        static let appearanceMode = "appearanceMode"
         static let timeZoneIdentifier = "timeZoneIdentifier"
         static let launchAtLogin = "launchAtLogin"
     }
@@ -47,6 +64,10 @@ public final class SettingsManager: ObservableObject {
 
     @Published public var statusBarQuotaDisplayMode: StatusBarQuotaDisplayMode {
         didSet { defaults.set(statusBarQuotaDisplayMode.rawValue, forKey: Keys.statusBarQuotaDisplayMode) }
+    }
+
+    @Published public var appearanceMode: AppearanceMode {
+        didSet { defaults.set(appearanceMode.rawValue, forKey: Keys.appearanceMode) }
     }
 
     @Published public var timeZoneIdentifier: String {
@@ -73,6 +94,8 @@ public final class SettingsManager: ObservableObject {
         self.alwaysRefresh = defaults.object(forKey: Keys.alwaysRefresh) as? Bool ?? true
         let storedDisplayMode = defaults.string(forKey: Keys.statusBarQuotaDisplayMode) ?? StatusBarQuotaDisplayMode.used.rawValue
         self.statusBarQuotaDisplayMode = StatusBarQuotaDisplayMode(rawValue: storedDisplayMode) ?? .used
+        let storedAppearanceMode = defaults.string(forKey: Keys.appearanceMode) ?? AppearanceMode.system.rawValue
+        self.appearanceMode = AppearanceMode(rawValue: storedAppearanceMode) ?? .system
         let storedTimeZone = defaults.string(forKey: Keys.timeZoneIdentifier) ?? TimeZone.current.identifier
         self.timeZoneIdentifier = TimeZone(identifier: storedTimeZone)?.identifier ?? TimeZone.current.identifier
         self.launchAtLogin = defaults.object(forKey: Keys.launchAtLogin) as? Bool ?? false

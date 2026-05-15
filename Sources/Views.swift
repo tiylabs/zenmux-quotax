@@ -253,13 +253,22 @@ struct MenuQuotaView: View {
         }
         .padding(12)
         .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-                .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 4)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(nsColor: .controlBackgroundColor).opacity(0.92),
+                            Color.primary.opacity(0.035)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: .black.opacity(0.16), radius: 16, x: 0, y: 8)
             if let progressValue {
                 WaveProgressBackground(progress: progressValue)
-                    .opacity(0.34)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .opacity(0.26)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         }
     }
@@ -302,7 +311,7 @@ struct MenuQuotaView: View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)
-                    .fill(Color.primary.opacity(0.08))
+                    .fill(Color.primary.opacity(0.12))
                 Capsule(style: .continuous)
                     .fill(
                         LinearGradient(
@@ -336,7 +345,11 @@ struct MenuQuotaView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color.primary.opacity(0.045))
+                .fill(Color.primary.opacity(0.07))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
         }
     }
 
@@ -369,7 +382,7 @@ struct WaveProgressBackground: View {
                     .frame(width: width)
 
                 WaveShape(progressWidth: width, amplitude: 5, wavelength: 34)
-                    .fill(Color.white.opacity(0.18))
+                    .fill(Color.primary.opacity(0.06))
                     .frame(width: width)
             }
         }
@@ -439,6 +452,29 @@ struct MenuContentView: View {
         }
         .padding(12)
         .frame(width: 380)
+        .background(panelBackground)
+        .foregroundStyle(Color.primary)
+    }
+
+    private var panelBackground: some View {
+        ZStack {
+            Color(nsColor: .windowBackgroundColor)
+            LinearGradient(
+                colors: [
+                    Color.accentColor.opacity(0.18),
+                    Color.cyan.opacity(0.08),
+                    Color.primary.opacity(0.04)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            RadialGradient(
+                colors: [Color.accentColor.opacity(0.16), .clear],
+                center: .topLeading,
+                startRadius: 12,
+                endRadius: 260
+            )
+        }
     }
 
     private var headerUpdatedText: String? {
@@ -469,8 +505,21 @@ struct MenuContentView: View {
         .padding(.horizontal, 16)
         .background {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-                .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 3)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(nsColor: .controlBackgroundColor).opacity(0.92),
+                            Color.primary.opacity(0.035)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 6)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
         }
     }
 
@@ -482,7 +531,11 @@ struct MenuContentView: View {
                     .frame(width: 32, height: 30)
                     .background {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.accentColor.opacity(0.14))
+                            .fill(Color.accentColor.opacity(0.18))
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(Color.accentColor.opacity(0.20), lineWidth: 1)
                     }
             }
             .buttonStyle(.plain)
@@ -533,15 +586,15 @@ struct MenuContentView: View {
                 .frame(width: 32, height: 30)
                 .background {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(role == .destructive ? Color.red.opacity(0.10) : Color.primary.opacity(0.07))
+                        .fill(role == .destructive ? Color.red.opacity(0.12) : Color.primary.opacity(0.08))
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(role == .destructive ? Color.red.opacity(0.22) : Color.primary.opacity(0.08), lineWidth: 1)
+                        .strokeBorder(role == .destructive ? Color.red.opacity(0.30) : Color.primary.opacity(0.12), lineWidth: 1)
                 }
         }
         .buttonStyle(.plain)
-        .foregroundStyle(role == .destructive ? .red : .primary)
+        .foregroundStyle(role == .destructive ? .red : .secondary)
         .accessibilityLabel(title)
     }
 }
@@ -725,8 +778,25 @@ struct SettingsView: View {
     }
 
     private var displaySection: some View {
-        settingsCard(icon: "menubar.rectangle", title: "Display", subtitle: "Decide how quota and time are shown in the menu bar panel.") {
+        settingsCard(icon: "menubar.rectangle", title: "Display", subtitle: "Decide how theme, quota, and time are shown in Quotax.") {
             VStack(spacing: 0) {
+                settingRow(
+                    title: "Theme",
+                    subtitle: "Choose Auto to follow your macOS appearance."
+                ) {
+                    Picker("Theme", selection: $settings.appearanceMode) {
+                        ForEach(AppearanceMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .accessibilityLabel("Theme")
+                    .pickerStyle(.segmented)
+                    .frame(width: 220)
+                }
+
+                rowDivider
+
                 settingRow(
                     title: "Status bar quota",
                     subtitle: "Switch between used and remaining quota percentages."
