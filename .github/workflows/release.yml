@@ -1,0 +1,190 @@
+name: Build and Upload Release Assets
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build macOS ${{ matrix.artifact_arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            arch: x86_64
+            artifact_arch: x86_64
+          - os: macos-14-xlarge
+            arch: arm64
+            artifact_arch: aarch64
+
+    steps:
+      - name: Resolve release tag
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [ -z "$TAG" ]; then
+            echo "::error::Failed to resolve release tag from github.ref_name"
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          if [ -z "$VERSION" ]; then
+            echo "::error::Failed to resolve version from tag $TAG"
+            exit 1
+          fi
+
+          if [[ ! "$VERSION" =~ ^[0-9]+(\.[0-9]+){0,2} ]]; then
+            echo "::error::Tag must start with a numeric Apple bundle version, for example v1.2.3 or 1.2.3. Got: $TAG"
+            exit 1
+          fi
+          BUNDLE_VERSION="${BASH_REMATCH[0]}"
+
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BUNDLE_VERSION=$BUNDLE_VERSION" >> "$GITHUB_ENV"
+          echo "Resolved release tag: $TAG"
+          echo "Resolved version: $VERSION"
+          echo "Resolved Apple bundle version: $BUNDLE_VERSION"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Set app version from tag
+        shell: bash
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $BUNDLE_VERSION" Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUNDLE_VERSION" Info.plist
+          /usr/bin/plutil -lint Info.plist
+          echo "Updated Info.plist to Apple bundle version $BUNDLE_VERSION"
+
+      - name: Build app
+        shell: bash
+        run: |
+          chmod +x build.sh
+          ARCH="${{ matrix.arch }}" ./build.sh
+          test -d "build/Quotax.app"
+          /usr/bin/file "build/Quotax.app/Contents/MacOS/Quotax"
+
+      - name: Import Apple signing certificate
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_CERTIFICATE_PASSWORD" ] || [ -z "$APPLE_SIGNING_IDENTITY" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            echo "::error::Missing Apple signing secrets. Required: APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY, APPLE_TEAM_ID."
+            exit 1
+          fi
+
+          CERTIFICATE_PATH="$RUNNER_TEMP/apple-signing-certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          if ! security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F "$APPLE_SIGNING_IDENTITY" | grep -F "$APPLE_TEAM_ID" >/dev/null; then
+            echo "::error::APPLE_SIGNING_IDENTITY was not found in the imported certificate for APPLE_TEAM_ID=$APPLE_TEAM_ID."
+            exit 1
+          fi
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Sign app
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_TEAM_ID" ]; then
+            echo "::error::Missing APPLE_TEAM_ID secret."
+            exit 1
+          fi
+
+          codesign --force \
+            --deep \
+            --options runtime \
+            --timestamp \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            "build/Quotax.app"
+
+          codesign --verify --deep --strict --verbose=2 "build/Quotax.app"
+          codesign --display --verbose=2 "build/Quotax.app"
+
+      - name: Prepare notarization archive
+        shell: bash
+        run: |
+          mkdir -p release-artifacts
+          NOTARY_ARTIFACT_PATH="$RUNNER_TEMP/Quotax_${VERSION}_${{ matrix.artifact_arch }}-notary.zip"
+          ditto -c -k --keepParent "build/Quotax.app" "$NOTARY_ARTIFACT_PATH"
+          echo "NOTARY_ARTIFACT_PATH=$NOTARY_ARTIFACT_PATH" >> "$GITHUB_ENV"
+
+      - name: Submit notarization
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            echo "::error::Missing notarization secrets. Required: APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID."
+            exit 1
+          fi
+
+          xcrun notarytool submit "$NOTARY_ARTIFACT_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+      - name: Staple notarization ticket
+        shell: bash
+        run: |
+          xcrun stapler staple "build/Quotax.app"
+          xcrun stapler validate "build/Quotax.app"
+
+      - name: Package app
+        shell: bash
+        run: |
+          ARTIFACT_NAME="Quotax_${VERSION}_${{ matrix.artifact_arch }}.zip"
+          ARTIFACT_PATH="release-artifacts/$ARTIFACT_NAME"
+          rm -f "$ARTIFACT_PATH"
+          ditto -c -k --keepParent "build/Quotax.app" "$ARTIFACT_PATH"
+          ls -la release-artifacts
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> "$GITHUB_ENV"
+          echo "ARTIFACT_PATH=$ARTIFACT_PATH" >> "$GITHUB_ENV"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: release-artifacts/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Save artifacts for later use
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos-${{ matrix.artifact_arch }}
+          path: release-artifacts/*
+          retention-days: 30
