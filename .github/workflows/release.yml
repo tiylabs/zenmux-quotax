@@ -4,12 +4,15 @@ on:
   push:
     tags:
       - "*"
+  release:
+    types: [released]
 
 permissions:
   contents: write
 
 jobs:
   build:
+    if: github.event_name == 'push'
     name: Build macOS ${{ matrix.artifact_arch }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -204,3 +207,103 @@ jobs:
           name: release-macos-${{ matrix.artifact_arch }}
           path: release-artifacts/*
           retention-days: 30
+
+  update-homebrew:
+    if: github.event_name == 'release' && github.event.action == 'released'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release tag
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          if [ -z "$TAG" ]; then
+            echo "::error::Failed to resolve release tag from release event"
+            exit 1
+          fi
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
+          echo "Resolved release tag: $TAG"
+
+      - name: Download macOS DMGs and compute SHA256
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DMG_ARM="Quotax_${VERSION}_aarch64.dmg"
+          DMG_X86_64="Quotax_${VERSION}_x86_64.dmg"
+
+          gh release download "$RELEASE_TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern "$DMG_ARM" \
+            --pattern "$DMG_X86_64" \
+            --dir .
+
+          SHA256_ARM64=$(sha256sum "$DMG_ARM" | awk '{print $1}')
+          SHA256_X86_64=$(sha256sum "$DMG_X86_64" | awk '{print $1}')
+
+          echo "SHA256_ARM64=$SHA256_ARM64" >> "$GITHUB_ENV"
+          echo "SHA256_X86_64=$SHA256_X86_64" >> "$GITHUB_ENV"
+
+          echo "aarch64 sha256: $SHA256_ARM64"
+          echo "x86_64 sha256: $SHA256_X86_64"
+
+      - name: Generate Cask file
+        run: |
+          cat > quotax.rb << 'CASK'
+          cask "quotax" do
+            version "__VERSION__"
+
+            on_arm do
+              url "https://github.com/tiylabs/zenmux-quotax/releases/download/#{version}/Quotax_#{version}_aarch64.dmg"
+              sha256 "__SHA256_ARM64__"
+            end
+
+            on_intel do
+              url "https://github.com/tiylabs/zenmux-quotax/releases/download/#{version}/Quotax_#{version}_x86_64.dmg"
+              sha256 "__SHA256_X86_64__"
+            end
+
+            name "Quotax"
+            desc "Lightweight macOS menu bar monitor for ZenMux subscription quotas"
+            homepage "https://github.com/tiylabs/zenmux-quotax"
+
+            livecheck do
+              url "https://github.com/tiylabs/zenmux-quotax/releases/latest"
+              strategy :github_latest
+            end
+
+            auto_updates false
+            depends_on macos: ">= :sequoia"
+
+            app "Quotax.app"
+
+            zap trash: [
+              "~/Library/Application Support/com.zenmux.quotax",
+              "~/Library/Caches/com.zenmux.quotax",
+              "~/Library/HTTPStorages/com.zenmux.quotax",
+              "~/Library/Preferences/com.zenmux.quotax.plist",
+              "~/Library/Saved Application State/com.zenmux.quotax.savedState",
+            ]
+          end
+          CASK
+
+          sed -i \
+            -e "s/__VERSION__/$VERSION/" \
+            -e "s/__SHA256_ARM64__/$SHA256_ARM64/" \
+            -e "s/__SHA256_X86_64__/$SHA256_X86_64/" \
+            quotax.rb
+
+          echo "Generated Cask:"
+          cat quotax.rb
+
+      - name: Push to Homebrew tap
+        uses: dmnemec/copy_file_to_another_repo_action@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.PAT_TOKEN }}
+        with:
+          source_file: quotax.rb
+          destination_repo: tiylabs/homebrew-tap
+          destination_folder: Casks
+          destination_branch: master
+          user_email: github-actions[bot]@users.noreply.github.com
+          user_name: github-actions[bot]
+          commit_message: "Update Quotax to ${{ env.VERSION }}"

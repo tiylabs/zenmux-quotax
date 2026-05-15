@@ -37,6 +37,21 @@ Quotax 驻留在 macOS 状态栏中，让你无需打开管理后台也能查看
 - Xcode Command Line Tools，或提供 `/usr/bin/swiftc` 的 macOS 工具链。
 - 来自 <https://zenmux.ai/platform/management> 的 ZenMux Management API Key。
 
+## 安装
+
+### 通过 Homebrew 安装（macOS）
+
+```bash
+brew tap tiylabs/tap
+brew install --cask quotax
+```
+
+后续升级：
+
+```bash
+brew upgrade quotax
+```
+
 ## 构建与运行
 
 ```bash

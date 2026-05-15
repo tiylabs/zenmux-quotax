@@ -37,6 +37,21 @@ Quotax sits in the macOS status bar and keeps ZenMux quota usage visible without
 - Xcode Command Line Tools or a macOS toolchain that provides `/usr/bin/swiftc`.
 - A ZenMux Management API key from <https://zenmux.ai/platform/management>.
 
+## Install
+
+### Install via Homebrew (macOS)
+
+```bash
+brew tap tiylabs/tap
+brew install --cask quotax
+```
+
+To upgrade later:
+
+```bash
+brew upgrade quotax
+```
+
 ## Build and Run
 
 ```bash
