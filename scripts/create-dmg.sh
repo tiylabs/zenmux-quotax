@@ -37,7 +37,10 @@ fi
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/quotax-dmg.XXXXXX")"
 STAGING_DIR="$TMP_DIR/staging"
 RW_DMG="$TMP_DIR/Quotax-rw.dmg"
-BACKGROUND_NAME="$(basename "$BACKGROUND_PATH")"
+BACKGROUND_NAME="DmgBackground.tiff"
+BACKGROUND_1X_PNG="$TMP_DIR/DmgBackground@1x.png"
+BACKGROUND_1X_TIFF="$TMP_DIR/DmgBackground@1x.tiff"
+BACKGROUND_2X_TIFF="$TMP_DIR/DmgBackground@2x.tiff"
 DEV_NAME=""
 MOUNT_DIR=""
 
@@ -52,7 +55,10 @@ trap cleanup EXIT
 mkdir -p "$STAGING_DIR/.background" "$(dirname "$OUTPUT_DMG")"
 ditto "$APP_PATH" "$STAGING_DIR/$APP_NAME"
 ln -s /Applications "$STAGING_DIR/Applications"
-cp "$BACKGROUND_PATH" "$STAGING_DIR/.background/$BACKGROUND_NAME"
+/usr/bin/sips -z "$WINDOW_HEIGHT" "$WINDOW_WIDTH" "$BACKGROUND_PATH" --out "$BACKGROUND_1X_PNG" >/dev/null
+/usr/bin/sips -s format tiff "$BACKGROUND_1X_PNG" --out "$BACKGROUND_1X_TIFF" >/dev/null
+/usr/bin/sips -s format tiff "$BACKGROUND_PATH" --out "$BACKGROUND_2X_TIFF" >/dev/null
+/usr/bin/tiffutil -cathidpicheck "$BACKGROUND_1X_TIFF" "$BACKGROUND_2X_TIFF" -out "$STAGING_DIR/.background/$BACKGROUND_NAME" >/dev/null
 chflags hidden "$STAGING_DIR/.background" || true
 
 rm -f "$OUTPUT_DMG" "$RW_DMG"
