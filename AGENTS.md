@@ -7,6 +7,8 @@ This repository contains a lightweight macOS menu bar app named Quotax. Swift so
 - `chmod +x build.sh`: Ensure the build script is executable.
 - `./build.sh`: Compile `Sources/*.swift`, copy app metadata/assets, lint the packaged plist, ad-hoc sign the app, and produce `build/Quotax.app`.
 - `ARCH=x86_64 ./build.sh` or `ARCH=arm64 ./build.sh`: Build for a specific macOS architecture.
+- `xcrun swift-format lint --configuration .swift-format <file.swift>`: Check Swift formatting for a specific file; use this before submitting Swift changes.
+- `swiftlint lint --config .swiftlint.yml <file.swift>`: Run SwiftLint for a specific file after installing SwiftLint, for example with `brew install swiftlint`.
 - `open build/Quotax.app`: Launch the built menu bar app for manual verification.
 
 There is currently no package manager command or automated test target.
@@ -14,8 +16,10 @@ There is currently no package manager command or automated test target.
 ## Coding Style & Naming Conventions
 Follow the existing Swift style: four-space indentation, `PascalCase` for types, `camelCase` for properties and methods, and descriptive file names tied to one responsibility. Keep UI coordination on the main actor where appropriate; current app-level types use `@MainActor` and observable state. Preserve explicit access control (`public`, `private`) and prefer focused files over expanding unrelated classes.
 
+Before submitting Swift changes, run `xcrun swift-format lint --configuration .swift-format` on changed files and review any diagnostics. Run SwiftLint with `.swiftlint.yml`; warnings are advisory during rollout, but error-level findings must be fixed before opening a pull request.
+
 ## Testing Guidelines
-No XCTest suite is configured. For each change, run `./build.sh` and manually launch `build/Quotax.app`. Verify the status bar item renders, settings open, API keys persist, refresh behavior works with and without a key, and errors remain user-readable. If tests are added later, place them under `Tests/` and document the command here.
+No XCTest suite is configured. For each change, run `./build.sh`, run the applicable `swift-format` and SwiftLint checks on changed Swift files, and manually launch `build/Quotax.app`. Verify the status bar item renders, settings open, API keys persist, refresh behavior works with and without a key, and errors remain user-readable. If tests are added later, place them under `Tests/` and document the command here.
 
 ## Commit & Pull Request Guidelines
 Recent history uses Conventional Commits with optional scopes and emoji, such as `feat(statusbar): ✨ reduce width and add background styling` and `ci(release): 👷 add macOS release workflow`. Use concise imperative summaries.
