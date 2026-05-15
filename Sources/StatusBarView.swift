@@ -11,7 +11,7 @@ public final class StatusBarView: NSView {
         didSet { bindService() }
     }
 
-    private static let statusWidth: CGFloat = 72
+    private static let statusWidth: CGFloat = AppConstants.StatusBar.width
     private var cancellables: Set<AnyCancellable> = []
 
     public override var intrinsicContentSize: NSSize {

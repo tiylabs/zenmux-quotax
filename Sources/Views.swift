@@ -21,7 +21,8 @@ struct PanelTimeFormatter {
     }
 
     static func format(isoString: String, timeZone: TimeZone) -> String {
-        let date = isoFormatter(formatOptions: [.withInternetDateTime, .withFractionalSeconds]).date(from: isoString)
+        let date =
+            isoFormatter(formatOptions: [.withInternetDateTime, .withFractionalSeconds]).date(from: isoString)
             ?? isoFormatter(formatOptions: [.withInternetDateTime]).date(from: isoString)
         guard let date else { return isoString }
         return format(date: date, timeZone: timeZone)
@@ -607,7 +608,7 @@ struct SettingsView: View {
     @State private var apiKeyInput: String = ""
     @State private var showKeySaved = false
 
-    private static let managementPortalURL = URL(string: "https://zenmux.ai/platform/management")!
+    private static let managementPortalURL = URL(string: AppConstants.API.managementPortalURLString)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -718,8 +719,10 @@ struct SettingsView: View {
 
                     Spacer(minLength: 8)
 
-                    Link(destination: Self.managementPortalURL) {
-                        Label("Get key", systemImage: "arrow.up.right")
+                    if let managementPortalURL = Self.managementPortalURL {
+                        Link(destination: managementPortalURL) {
+                            Label("Get key", systemImage: "arrow.up.right")
+                        }
                     }
                 }
                 .font(.caption)

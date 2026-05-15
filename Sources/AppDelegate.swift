@@ -12,13 +12,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     public let apiService = ZenmuxAPIService()
     public let settings = SettingsManager.shared
 
-    private let menuWidth: CGFloat = 380
+    private let menuWidth: CGFloat = AppConstants.Menu.width
     private var menuHost: NSHostingView<MenuContentView>?
     private var appearanceCancellable: AnyCancellable?
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        AppLog.lifecycle.info("Application did finish launching")
         NSApp.setActivationPolicy(.accessory)
         applyAppearanceMode(settings.appearanceMode)
         appearanceCancellable = settings.$appearanceMode.sink { [weak self] mode in
@@ -82,7 +83,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     }
 
     private func setupStatusItem() {
-        let statusWidth: CGFloat = 72
+        let statusWidth: CGFloat = AppConstants.StatusBar.width
         let item = NSStatusBar.system.statusItem(withLength: statusWidth)
         let view = StatusBarView(frame: NSRect(x: 0, y: 0, width: statusWidth, height: NSStatusBar.system.thickness))
         view.apiService = apiService
@@ -119,7 +120,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         guard let button = statusItem?.button else { return }
         let host = makeMenuHost()
         let fittingSize = host.fittingSize
-        let panelHeight = max(fittingSize.height, 180)
+        let panelHeight = max(fittingSize.height, AppConstants.Menu.minimumHeight)
         host.frame = NSRect(x: 0, y: 0, width: menuWidth, height: panelHeight)
 
         let panel = NSPanel(
@@ -138,26 +139,31 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         panel.hidesOnDeactivate = false
 
         if let screenFrame = button.window?.screen?.visibleFrame, let buttonFrame = button.window?.convertToScreen(button.frame) {
-            let originX = min(max(buttonFrame.midX - menuWidth / 2, screenFrame.minX + 8), screenFrame.maxX - menuWidth - 8)
-            let originY = buttonFrame.minY - panelHeight - 6
+            let originX = min(max(buttonFrame.midX - menuWidth / 2, screenFrame.minX + AppConstants.Menu.edgeInset), screenFrame.maxX - menuWidth - AppConstants.Menu.edgeInset)
+            let originY = buttonFrame.minY - panelHeight - AppConstants.Menu.verticalOffset
             panel.setFrameOrigin(NSPoint(x: originX, y: originY))
         } else if let screenFrame = NSScreen.main?.visibleFrame {
-            panel.setFrameOrigin(NSPoint(x: screenFrame.midX - menuWidth / 2, y: screenFrame.maxY - panelHeight - 32))
+            panel.setFrameOrigin(NSPoint(x: screenFrame.midX - menuWidth / 2, y: screenFrame.maxY - panelHeight - AppConstants.Menu.fallbackTopOffset))
         }
         host.layoutSubtreeIfNeeded()
 
         menuPanel = panel
         isMenuOpen = true
         installMenuPanelEventMonitors()
+        AppLog.lifecycle.debug("Menu panel opened")
         panel.orderFrontRegardless()
     }
 
     private func closeMenuPanel() {
+        let wasOpen = menuPanel != nil || isMenuOpen
         menuPanel?.orderOut(nil)
         menuPanel = nil
         menuHost = nil
         isMenuOpen = false
         removeMenuPanelEventMonitors()
+        if wasOpen {
+            AppLog.lifecycle.debug("Menu panel closed")
+        }
     }
 
     private func makeMenuHost() -> NSHostingView<MenuContentView> {
@@ -219,6 +225,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     }
 
     @objc public func openSettings() {
+        AppLog.lifecycle.info("Opening settings window")
         if let settingsWindow {
             settings.refreshLaunchAtLoginStatus()
             settingsWindow.makeKeyAndOrderFront(nil)
@@ -249,12 +256,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     }
 
     @objc public func openManagementPortal() {
-        if let url = URL(string: "https://zenmux.ai/platform/management") {
+        if let url = URL(string: AppConstants.API.managementPortalURLString) {
             NSWorkspace.shared.open(url)
         }
     }
 
     @objc public func quitApp() {
+        AppLog.lifecycle.info("Application requested quit")
         closeMenuPanel()
         settingsWindow?.close()
         apiService.stopAutoRefresh()

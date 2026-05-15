@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import ServiceManagement
 
 public enum StatusBarQuotaDisplayMode: String, CaseIterable, Identifiable {
     case used
@@ -64,6 +63,7 @@ public final class SettingsManager: ObservableObject {
     public static let preferredTimeZoneIdentifiers = TimeZone.knownTimeZoneIdentifiers.sorted()
 
     private let defaults: UserDefaults
+    private let launchAtLoginService: LaunchAtLoginService
 
     @Published public var apiKey: String {
         didSet { defaults.set(apiKey, forKey: Keys.apiKey) }
@@ -101,15 +101,14 @@ public final class SettingsManager: ObservableObject {
     }
 
     @Published public private(set) var launchAtLoginError: String?
-    public let hasStoredLaunchAtLoginPreference: Bool
     private var isApplyingLaunchAtLoginRollback = false
 
-    public init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = .standard, launchAtLoginService: LaunchAtLoginService = LaunchAtLoginService()) {
         self.defaults = defaults
-        self.hasStoredLaunchAtLoginPreference = defaults.object(forKey: Keys.launchAtLogin) != nil
+        self.launchAtLoginService = launchAtLoginService
         self.apiKey = defaults.string(forKey: Keys.apiKey) ?? ""
         let storedInterval = defaults.double(forKey: Keys.refreshInterval)
-        self.refreshInterval = storedInterval > 0 ? storedInterval : 300
+        self.refreshInterval = storedInterval > 0 ? storedInterval : AppConstants.Refresh.defaultInterval
         self.alwaysRefresh = defaults.object(forKey: Keys.alwaysRefresh) as? Bool ?? true
         let storedDisplayMode = defaults.string(forKey: Keys.statusBarQuotaDisplayMode) ?? StatusBarQuotaDisplayMode.used.rawValue
         self.statusBarQuotaDisplayMode = StatusBarQuotaDisplayMode(rawValue: storedDisplayMode) ?? .used
@@ -131,12 +130,8 @@ public final class SettingsManager: ObservableObject {
         TimeZone(identifier: timeZoneIdentifier) ?? .current
     }
 
-    public func syncLaunchAtLoginSetting() {
-        refreshLaunchAtLoginStatus()
-    }
-
     public func refreshLaunchAtLoginStatus() {
-        applyLaunchAtLoginStatus(SMAppService.mainApp.status == .enabled, clearError: true)
+        applyLaunchAtLoginStatus(launchAtLoginService.isEnabled, clearError: true)
     }
 
     private func applyLaunchAtLoginStatus(_ systemEnabled: Bool, clearError: Bool) {
@@ -151,17 +146,11 @@ public final class SettingsManager: ObservableObject {
 
     private func setLaunchAtLogin(_ enabled: Bool) {
         do {
-            if enabled {
-                if SMAppService.mainApp.status != .enabled {
-                    try SMAppService.mainApp.register()
-                }
-            } else if SMAppService.mainApp.status != .notRegistered {
-                try SMAppService.mainApp.unregister()
-            }
-            applyLaunchAtLoginStatus(SMAppService.mainApp.status == .enabled, clearError: true)
+            try launchAtLoginService.setEnabled(enabled)
+            applyLaunchAtLoginStatus(launchAtLoginService.isEnabled, clearError: true)
         } catch {
             launchAtLoginError = error.localizedDescription
-            applyLaunchAtLoginStatus(SMAppService.mainApp.status == .enabled, clearError: false)
+            applyLaunchAtLoginStatus(launchAtLoginService.isEnabled, clearError: false)
         }
     }
 }
