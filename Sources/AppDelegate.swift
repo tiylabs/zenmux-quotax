@@ -14,10 +14,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        settings.refreshLaunchAtLoginStatus()
         setupApplicationMenu()
         setupStatusItem()
         apiService.startAutoRefresh(settings: settings)
-        settings.syncLaunchAtLoginSetting()
         if settings.trimmedAPIKey.isEmpty {
             openSettings()
         } else {
@@ -115,11 +115,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
 
     @objc public func openSettings() {
         if let settingsWindow {
+            settings.refreshLaunchAtLoginStatus()
             settingsWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
+        settings.refreshLaunchAtLoginStatus()
         let content = SettingsView(
             settings: settings,
             onSaveAPIKey: { [weak self] apiKey in

@@ -334,6 +334,7 @@ struct SettingsView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             apiKeyInput = settings.apiKey
+            settings.refreshLaunchAtLoginStatus()
         }
     }
 

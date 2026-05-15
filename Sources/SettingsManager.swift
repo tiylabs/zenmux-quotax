@@ -88,8 +88,21 @@ public final class SettingsManager: ObservableObject {
     }
 
     public func syncLaunchAtLoginSetting() {
-        guard hasStoredLaunchAtLoginPreference else { return }
-        setLaunchAtLogin(launchAtLogin)
+        refreshLaunchAtLoginStatus()
+    }
+
+    public func refreshLaunchAtLoginStatus() {
+        applyLaunchAtLoginStatus(SMAppService.mainApp.status == .enabled, clearError: true)
+    }
+
+    private func applyLaunchAtLoginStatus(_ systemEnabled: Bool, clearError: Bool) {
+        isApplyingLaunchAtLoginRollback = true
+        launchAtLogin = systemEnabled
+        isApplyingLaunchAtLoginRollback = false
+        defaults.set(systemEnabled, forKey: Keys.launchAtLogin)
+        if clearError {
+            launchAtLoginError = nil
+        }
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {
@@ -101,13 +114,10 @@ public final class SettingsManager: ObservableObject {
             } else if SMAppService.mainApp.status != .notRegistered {
                 try SMAppService.mainApp.unregister()
             }
-            defaults.set(enabled, forKey: Keys.launchAtLogin)
-            launchAtLoginError = nil
+            applyLaunchAtLoginStatus(SMAppService.mainApp.status == .enabled, clearError: true)
         } catch {
             launchAtLoginError = error.localizedDescription
-            isApplyingLaunchAtLoginRollback = true
-            launchAtLogin = defaults.object(forKey: Keys.launchAtLogin) as? Bool ?? false
-            isApplyingLaunchAtLoginRollback = false
+            applyLaunchAtLoginStatus(SMAppService.mainApp.status == .enabled, clearError: false)
         }
     }
 }
