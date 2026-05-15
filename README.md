@@ -99,9 +99,11 @@ Sources/
     Views.swift                 SwiftUI menu and settings UI
 Resources/
   AppIcon.icns                  App icon
+  DmgBackground.png             DMG installer background source image
 Info.plist                      Bundle metadata and macOS settings
 scripts/
   build.sh                      Direct swiftc build script
+  create-dmg.sh                 Styled DMG packaging script
 .github/workflows/              Release build, signing, notarization, and upload workflow
 ```
 
