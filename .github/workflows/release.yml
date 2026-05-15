@@ -78,11 +78,10 @@ jobs:
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_CERTIFICATE_PASSWORD" ] || [ -z "$APPLE_SIGNING_IDENTITY" ] || [ -z "$APPLE_TEAM_ID" ]; then
-            echo "::error::Missing Apple signing secrets. Required: APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY, APPLE_TEAM_ID."
+          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_CERTIFICATE_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            echo "::error::Missing Apple signing secrets. Required: APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_TEAM_ID."
             exit 1
           fi
 
@@ -103,17 +102,21 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
-          if ! security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F "$APPLE_SIGNING_IDENTITY" | grep -F "$APPLE_TEAM_ID" >/dev/null; then
-            echo "::error::APPLE_SIGNING_IDENTITY was not found in the imported certificate for APPLE_TEAM_ID=$APPLE_TEAM_ID."
+
+          IDENTITY_LINE="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep 'Developer ID Application:' | grep -F "($APPLE_TEAM_ID)" | head -n 1 || true)"
+          APPLE_SIGNING_IDENTITY="$(printf '%s\n' "$IDENTITY_LINE" | awk -F '"' '{print $2}')"
+          if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "::error::Failed to resolve Developer ID Application signing identity for APPLE_TEAM_ID=$APPLE_TEAM_ID from the imported certificate."
             exit 1
           fi
 
+          echo "Resolved Apple signing identity: $APPLE_SIGNING_IDENTITY"
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
 
       - name: Sign app
         shell: bash
         env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ -z "$APPLE_TEAM_ID" ]; then
@@ -133,8 +136,6 @@ jobs:
 
       - name: Package app
         shell: bash
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           mkdir -p release-artifacts
 
