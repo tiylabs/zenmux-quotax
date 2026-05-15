@@ -95,9 +95,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
             onQuit: { [weak self] in self?.quitApp() }
         )
         let host = NSHostingView(rootView: view)
-        host.frame = NSRect(x: 0, y: 0, width: 360, height: 1)
+        let menuWidth: CGFloat = 380
+        host.frame = NSRect(x: 0, y: 0, width: menuWidth, height: 1)
         host.layoutSubtreeIfNeeded()
-        host.frame = NSRect(x: 0, y: 0, width: 360, height: max(host.fittingSize.height, 180))
+        host.frame = NSRect(x: 0, y: 0, width: menuWidth, height: max(host.fittingSize.height, 180))
         let item = NSMenuItem()
         item.view = host
         menu.addItem(item)

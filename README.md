@@ -107,7 +107,11 @@ flowchart LR
 
 `.github/workflows/release.yml` builds release assets on tag pushes such as `v1.2.3`. The workflow updates bundle versions from the tag, builds x86_64 and arm64 apps, signs, notarizes, staples, packages, and uploads zipped artifacts. Signing and notarization require GitHub Actions secrets for Apple credentials.
 
+## Acknowledgements
+
+Quotax is inspired by [zenmux-monitor](https://github.com/jianxing-chen/zenmux-monitor). Thanks to the project for the idea and reference.
+
 ## License
 
-No license file is currently present in this repository.
+Quotax is licensed under the [Apache License 2.0](LICENSE).
 

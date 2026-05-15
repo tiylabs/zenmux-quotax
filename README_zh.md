@@ -107,7 +107,11 @@ flowchart LR
 
 `.github/workflows/release.yml` 会在推送 `v1.2.3` 这类 tag 时构建发布产物。工作流会根据 tag 更新 bundle 版本，构建 x86_64 与 arm64 应用，完成签名、公证、staple、打包并上传 zip 文件。签名与公证依赖 GitHub Actions 中配置的 Apple 凭据 secrets。
 
+## 致谢
+
+Quotax 受 [zenmux-monitor](https://github.com/jianxing-chen/zenmux-monitor) 项目启发而构建，感谢该项目提供的思路与参考。
+
 ## 许可证
 
-本仓库当前没有 license 文件。
+Quotax 使用 [Apache License 2.0](LICENSE) 开源。
 

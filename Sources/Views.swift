@@ -45,15 +45,18 @@ struct MenuHeaderView: View {
     let data: ZenmuxSubscriptionData?
 
     var body: some View {
-        HStack(alignment: .top) {
+        HStack(alignment: .top, spacing: 12) {
             Image(nsImage: zenmuxAppIcon())
                 .resizable()
                 .aspectRatio(contentMode: .fill)
-                .frame(width: 34, height: 34)
-                .clipShape(RoundedRectangle(cornerRadius: 7))
-            VStack(alignment: .leading, spacing: 2) {
+                .frame(width: 38, height: 38)
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 4)
+
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.headline)
+                    .fontWeight(.semibold)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Text(expText)
@@ -63,28 +66,30 @@ struct MenuHeaderView: View {
                     .truncationMode(.middle)
             }
             .layoutPriority(1)
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                if let data {
-                    Text("Status: \(data.primaryStatus)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    if let updatedText {
-                        Text(updatedText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
-                } else if apiService.isRefreshing {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-            }
-            .offset(y: 2)
+
+            Spacer(minLength: 8)
+
+            statusBadge
         }
+        .padding(.horizontal, 2)
+        .padding(.vertical, 4)
+    }
+
+    private var statusBadge: some View {
+        Label(statusText, systemImage: statusIcon)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .foregroundStyle(statusColor)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background {
+                Capsule(style: .continuous)
+                    .fill(statusColor.opacity(0.12))
+            }
+            .accessibilityLabel("Status: \(statusText). \(statusDescription)")
+            .help(statusDescription)
     }
 
     private var title: String {
@@ -93,13 +98,63 @@ struct MenuHeaderView: View {
     }
 
     private var expText: String {
-        guard let expiresAt = data?.plan?.expiresAt else { return "Management API" }
-        return "Exp: \(PanelTimeFormatter.format(isoString: expiresAt, timeZone: settings.timeZone))"
+        guard let expiresAt = data?.plan?.expiresAt else { return "Management API quota monitor" }
+        return "Expires \(PanelTimeFormatter.format(isoString: expiresAt, timeZone: settings.timeZone))"
     }
 
-    private var updatedText: String? {
-        guard !apiService.isPaused, let updated = apiService.lastUpdated else { return nil }
-        return PanelTimeFormatter.relativeUpdatedText(since: updated)
+    private var statusText: String {
+        if apiService.isRefreshing { return "refreshing" }
+        if apiService.isPaused { return "paused" }
+        guard let rawStatus = data?.primaryStatus.trimmingCharacters(in: .whitespacesAndNewlines), !rawStatus.isEmpty else {
+            return settings.trimmedAPIKey.isEmpty ? "setup" : "ready"
+        }
+        return rawStatus.lowercased()
+    }
+
+    private var statusDescription: String {
+        guard let rawStatus = data?.primaryStatus.lowercased() else { return statusText }
+        switch rawStatus {
+        case "healthy": return "Normal"
+        case "monitored": return "Usage anomaly detected; service remains available"
+        case "abusive": return "Abusive usage detected; restrictions applied"
+        case "suspended": return "Account suspended"
+        case "banned": return "Account banned"
+        default: return statusText
+        }
+    }
+
+    private var statusIcon: String {
+        if apiService.isRefreshing { return "arrow.triangle.2.circlepath" }
+        if apiService.isPaused { return "pause.fill" }
+        guard let rawStatus = data?.primaryStatus.lowercased() else {
+            return settings.trimmedAPIKey.isEmpty ? "key.slash" : "bolt.fill"
+        }
+
+        switch rawStatus {
+        case "healthy": return "checkmark.seal.fill"
+        case "monitored": return "eye.fill"
+        case "abusive": return "exclamationmark.triangle.fill"
+        case "suspended": return "pause.octagon.fill"
+        case "banned": return "xmark.octagon.fill"
+        default: return "questionmark.circle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        if apiService.isRefreshing { return Color.accentColor }
+        if apiService.isPaused { return .orange }
+        guard let rawStatus = data?.primaryStatus.lowercased() else {
+            return settings.trimmedAPIKey.isEmpty ? .orange : Color.accentColor
+        }
+
+        switch rawStatus {
+        case "healthy": return .green
+        case "monitored": return .yellow
+        case "abusive": return .orange
+        case "suspended": return .red
+        case "banned": return .red
+        default: return .secondary
+        }
     }
 }
 
@@ -142,42 +197,147 @@ struct MenuQuotaView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title).font(.subheadline).bold()
-                Spacer()
-                if let resetsAt, !resetsAt.isEmpty {
-                    Text("Resets: \(PanelTimeFormatter.format(isoString: resetsAt, timeZone: timeZone))")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if let resetText {
+                    Text(resetText)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                        .truncationMode(.tail)
+                        .truncationMode(.middle)
                 }
             }
-            HStack(spacing: 0) {
+
+            HStack(alignment: .bottom, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(primaryLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(primaryValueText)
+                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .layoutPriority(1)
+
+                Spacer(minLength: 8)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(secondaryLabel)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(secondaryValueText)
+                        .font(.callout)
+                        .fontWeight(.medium)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+            }
+
+            if let progressValue {
+                progressBar(progressValue)
+            }
+
+            HStack(spacing: 8) {
                 metric("Used", value: usedFlows.map(formatNumber) ?? "—")
                 metric("Left", value: remainingFlows.map(formatNumber) ?? "—")
                 metric("Limit", value: maxFlows.map(formatNumber) ?? "—")
-                metric("Value", value: maxValueUSD.map { "$" + formatNumber($0) } ?? usedValueUSD.map { "$" + formatNumber($0) } ?? "—")
+                metric("Value", value: valueText)
             }
         }
-        .padding(8)
+        .padding(12)
         .background {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.quaternary.opacity(0.6))
-            if showsWaveProgress, let usagePercentage {
-                WaveProgressBackground(progress: min(max(usagePercentage, 0), 1))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 4)
+            if let progressValue {
+                WaveProgressBackground(progress: progressValue)
+                    .opacity(0.34)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
     }
 
-    private func metric(_ label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(label).font(.caption2).foregroundStyle(.secondary)
-            Text(value).font(.caption).monospacedDigit()
+    private var resetText: String? {
+        guard let resetsAt, !resetsAt.isEmpty else { return nil }
+        return "Resets \(PanelTimeFormatter.format(isoString: resetsAt, timeZone: timeZone))"
+    }
+
+    private var progressValue: Double? {
+        guard showsWaveProgress, let usagePercentage else { return nil }
+        return min(max(usagePercentage, 0), 1)
+    }
+
+    private var primaryLabel: String {
+        progressValue == nil ? "Monthly limit" : "Usage"
+    }
+
+    private var primaryValueText: String {
+        if let progressValue { return "\(Int((progressValue * 100).rounded()))%" }
+        return maxFlows.map(formatNumber) ?? "—"
+    }
+
+    private var secondaryLabel: String {
+        progressValue == nil ? "Value" : "Remaining"
+    }
+
+    private var secondaryValueText: String {
+        if progressValue == nil { return valueText }
+        return remainingFlows.map(formatNumber) ?? "—"
+    }
+
+    private var valueText: String {
+        if let maxValueUSD { return "$" + formatNumber(maxValueUSD) }
+        if let usedValueUSD { return "$" + formatNumber(usedValueUSD) }
+        return "—"
+    }
+
+    private func progressBar(_ progress: Double) -> some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(Color.primary.opacity(0.08))
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.accentColor, Color.cyan.opacity(0.85)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: max(6, geometry.size.width * progress))
+            }
         }
+        .frame(height: 6)
+        .accessibilityLabel("Usage \(primaryValueText)")
+    }
+
+    private func metric(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(value)
+                .font(.caption)
+                .fontWeight(.medium)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.primary.opacity(0.045))
+        }
     }
 
     private func formatNumber(_ value: Double) -> String {
@@ -256,42 +416,114 @@ struct MenuContentView: View {
             MenuHeaderView(apiService: apiService, settings: settings, data: apiService.subscriptionData)
 
             if let data = apiService.subscriptionData {
-                if let quota5 = data.quota5Hour {
-                    MenuQuotaView(title: "5 hour flows", window: quota5, timeZone: settings.timeZone)
-                }
-                if let quota7 = data.quota7Day {
-                    MenuQuotaView(title: "7 day flows", window: quota7, timeZone: settings.timeZone)
-                }
-                if let monthly = data.quotaMonthly {
-                    MenuQuotaView(title: "Monthly flows", monthly: monthly, timeZone: settings.timeZone)
+                VStack(spacing: 8) {
+                    if let quota5 = data.quota5Hour {
+                        MenuQuotaView(title: "5 hour flows", window: quota5, timeZone: settings.timeZone)
+                    }
+                    if let quota7 = data.quota7Day {
+                        MenuQuotaView(title: "7 day flows", window: quota7, timeZone: settings.timeZone)
+                    }
+                    if let monthly = data.quotaMonthly {
+                        MenuQuotaView(title: "Monthly flows", monthly: monthly, timeZone: settings.timeZone)
+                    }
                 }
             } else {
-                ContentUnavailableView(
-                    "No subscription data",
-                    systemImage: "chart.bar.doc.horizontal",
-                    description: Text(settings.trimmedAPIKey.isEmpty ? "Set Management API Key in Settings." : "Refresh to load quota.")
-                )
-                .frame(height: 120)
+                emptyState
             }
 
             if let error = apiService.lastError {
-                Text(error.localizedDescription)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
+                errorBanner(error.localizedDescription)
             }
 
-            Divider()
-                .padding(.top, 2)
-            HStack(spacing: 8) {
-                footerButton("Refresh", systemImage: "arrow.clockwise", action: onRefresh)
-                footerButton("Settings", systemImage: "gearshape", action: onOpenSettings)
-                Spacer(minLength: 12)
-                footerButton("Quit", systemImage: "power", role: .destructive, action: onQuit)
-            }
+            footerToolbar
         }
-        .padding(14)
-        .frame(width: 360)
+        .padding(12)
+        .frame(width: 380)
+    }
+
+    private var headerUpdatedText: String? {
+        guard !apiService.isPaused, let updated = apiService.lastUpdated else { return nil }
+        return PanelTimeFormatter.relativeUpdatedText(since: updated)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: settings.trimmedAPIKey.isEmpty ? "key.slash" : "chart.bar.doc.horizontal")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 44, height: 44)
+                .background {
+                    Circle().fill(Color.accentColor.opacity(0.12))
+                }
+
+            Text("No subscription data")
+                .font(.headline)
+            Text(settings.trimmedAPIKey.isEmpty ? "Set your Management API Key in Settings to load quota." : "Refresh to load the latest quota data.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 18)
+        .padding(.horizontal, 16)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+                .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 3)
+        }
+    }
+
+    private var footerToolbar: some View {
+        HStack(spacing: 8) {
+            Button(action: onRefresh) {
+                Image(systemName: apiService.isRefreshing ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 32, height: 30)
+                    .background {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.14))
+                    }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.accentColor)
+            .accessibilityLabel(apiService.isRefreshing ? "Refreshing" : "Refresh")
+
+            if let updatedText = headerUpdatedText {
+                Text(updatedText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            Spacer(minLength: 8)
+
+            footerButton("Settings", systemImage: "gearshape", action: onOpenSettings)
+            footerButton("Quit", systemImage: "power", role: .destructive, action: onQuit)
+        }
+        .padding(.top, 2)
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        Label {
+            Text(message)
+                .font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill")
+        }
+        .foregroundStyle(.red)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.red.opacity(0.10))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.red.opacity(0.20), lineWidth: 1)
+        }
     }
 
     private func footerButton(_ title: String, systemImage: String, role: ButtonRole? = nil, action: @escaping () -> Void) -> some View {
@@ -305,7 +537,7 @@ struct MenuContentView: View {
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(role == .destructive ? Color.red.opacity(0.22) : Color.white.opacity(0.22), lineWidth: 1)
+                        .strokeBorder(role == .destructive ? Color.red.opacity(0.22) : Color.primary.opacity(0.08), lineWidth: 1)
                 }
         }
         .buttonStyle(.plain)
