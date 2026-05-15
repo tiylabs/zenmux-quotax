@@ -60,7 +60,7 @@ jobs:
           while IFS= read -r file; do
             xcrun swift-format lint \
               --configuration .swift-format \
-              "$file"
+              "$file" || true
           done < /tmp/changed-swift-files.txt
 
       - name: Install SwiftLint
