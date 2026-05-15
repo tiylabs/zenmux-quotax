@@ -323,15 +323,35 @@ struct SettingsView: View {
     private static let managementPortalURL = URL(string: "https://zenmux.ai/platform/management")!
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 0) {
             header
-            apiKeySection
-            preferencesSection
-            Spacer(minLength: 0)
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                .padding(.bottom, 18)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    apiKeySection
+                    behaviorSection
+                    displaySection
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
         }
-        .padding(20)
-        .frame(width: 500, height: 500)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(width: 560, height: 640)
+        .background {
+            LinearGradient(
+                colors: [
+                    Color(nsColor: .windowBackgroundColor),
+                    Color(nsColor: .controlBackgroundColor).opacity(0.55)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
         .onAppear {
             apiKeyInput = settings.apiKey
             settings.refreshLaunchAtLoginStatus()
@@ -339,145 +359,237 @@ struct SettingsView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .center, spacing: 14) {
             Image(nsImage: zenmuxAppIcon())
                 .resizable()
                 .aspectRatio(contentMode: .fill)
-                .frame(width: 42, height: 42)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .frame(width: 48, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 5)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Quotax")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Quotax Settings")
                     .font(.title2)
                     .fontWeight(.semibold)
-                Text("Settings for your ZenMux quota monitor")
-                    .font(.caption)
+                    .lineLimit(1)
+                Text("Connect ZenMux, control refresh behavior, and tune the menu bar display.")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
             }
+            .layoutPriority(0)
 
-            Spacer()
+            Spacer(minLength: 16)
+
+            statusPill
+                .layoutPriority(1)
         }
+    }
+
+    private var statusPill: some View {
+        Label(settings.trimmedAPIKey.isEmpty ? "Not connected" : "Connected", systemImage: settings.trimmedAPIKey.isEmpty ? "key.slash" : "checkmark.seal.fill")
+            .font(.caption)
+            .fontWeight(.semibold)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .foregroundStyle(settings.trimmedAPIKey.isEmpty ? Color.orange : Color.green)
+            .frame(minWidth: 104, alignment: .center)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background {
+                Capsule(style: .continuous)
+                    .fill((settings.trimmedAPIKey.isEmpty ? Color.orange : Color.green).opacity(0.12))
+            }
     }
 
     private var apiKeySection: some View {
-        settingsCard {
+        settingsCard(icon: "key.fill", title: "Management API", subtitle: "Used only to fetch your ZenMux quota and subscription data.") {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Management API Key")
-                            .font(.headline)
-                        Text("Connect Quotax to your ZenMux subscription data.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer()
-
-                    Link("Get Key", destination: Self.managementPortalURL)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                }
-
-                HStack(spacing: 8) {
-                    SecureField("Zenmux Management API Key", text: $apiKeyInput)
+                HStack(spacing: 10) {
+                    SecureField("Paste ZenMux Management API Key", text: $apiKeyInput)
                         .textFieldStyle(.roundedBorder)
+                        .controlSize(.large)
+
                     Button("Save") {
                         onSaveAPIKey(apiKeyInput)
-                        showKeySaved = true
+                        showKeySaved = !apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     }
                     .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                     .keyboardShortcut(.defaultAction)
                 }
 
-                if showKeySaved {
-                    Label("API Key saved", systemImage: "checkmark.circle.fill")
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if showKeySaved {
+                        Label("API key saved. Quotax will refresh quota data automatically.", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else {
+                        Label("Your key is stored locally in macOS user defaults.", systemImage: "lock.fill")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Link(destination: Self.managementPortalURL) {
+                        Label("Get key", systemImage: "arrow.up.right")
+                    }
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+    private var behaviorSection: some View {
+        settingsCard(icon: "arrow.triangle.2.circlepath", title: "Refresh behavior", subtitle: "Choose when Quotax updates subscription data.") {
+            VStack(spacing: 0) {
+                settingRow(
+                    title: "Auto refresh",
+                    subtitle: "Keep quota data updated while Quotax is running."
+                ) {
+                    Toggle("", isOn: $settings.alwaysRefresh)
+                        .labelsHidden()
+                        .accessibilityLabel("Auto refresh")
+                        .help("Keep quota data updated while Quotax is running.")
+                }
+
+                rowDivider
+
+                settingRow(
+                    title: "Refresh interval",
+                    subtitle: "How often Quotax requests fresh quota data."
+                ) {
+                    HStack(spacing: 6) {
+                        TextField("refresh_interval", value: $settings.refreshInterval, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 82)
+                        Text("sec")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                rowDivider
+
+                settingRow(
+                    title: "Launch at login",
+                    subtitle: "Start Quotax automatically after you sign in."
+                ) {
+                    Toggle("", isOn: $settings.launchAtLogin)
+                        .labelsHidden()
+                        .accessibilityLabel("Launch at login")
+                }
+
+                if let launchAtLoginError = settings.launchAtLoginError {
+                    Label("Launch at login: \(launchAtLoginError)", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 10)
                 }
             }
         }
     }
 
-    private var preferencesSection: some View {
-        settingsCard {
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Preferences")
-                        .font(.headline)
-                    Text("Tune update behavior and the menu bar display.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle("Auto refresh", isOn: $settings.alwaysRefresh)
-                            .help("Keep quota data updated while Quotax is running.")
-
-                        HStack(spacing: 8) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Refresh interval")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                Text("How often Quotax requests fresh quota data.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            TextField("refresh_interval", value: $settings.refreshInterval, format: .number)
-                                .textFieldStyle(.roundedBorder)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 76)
-                            Text("sec")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Divider()
-
-                    Toggle("Launch at login", isOn: $settings.launchAtLogin)
-
-                    if let launchAtLoginError = settings.launchAtLoginError {
-                        Label("Launch at login: \(launchAtLoginError)", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Divider()
-
+    private var displaySection: some View {
+        settingsCard(icon: "menubar.rectangle", title: "Display", subtitle: "Decide how quota and time are shown in the menu bar panel.") {
+            VStack(spacing: 0) {
+                settingRow(
+                    title: "Status bar quota",
+                    subtitle: "Switch between used and remaining quota percentages."
+                ) {
                     Picker("Status bar quota", selection: $settings.statusBarQuotaDisplayMode) {
                         ForEach(StatusBarQuotaDisplayMode.allCases) { mode in
                             Text(mode.title).tag(mode)
                         }
                     }
+                    .labelsHidden()
+                    .accessibilityLabel("Status bar quota")
                     .pickerStyle(.segmented)
+                    .frame(width: 250)
+                }
 
+                rowDivider
+
+                settingRow(
+                    title: "Time zone",
+                    subtitle: "Used for expiration and quota reset times."
+                ) {
                     Picker("Time zone", selection: $settings.timeZoneIdentifier) {
                         ForEach(SettingsManager.preferredTimeZoneIdentifiers, id: \.self) { identifier in
                             Text(identifier).tag(identifier)
                         }
                     }
+                    .labelsHidden()
+                    .accessibilityLabel("Time zone")
+                    .frame(minWidth: 280, idealWidth: 320)
                 }
             }
         }
     }
 
-    private func settingsCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
+    private var rowDivider: some View {
+        Divider()
+            .padding(.vertical, 12)
+    }
+
+    private func settingRow<Control: View>(title: String, subtitle: String, @ViewBuilder control: () -> Control) -> some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            .layoutPriority(1)
+
+            Spacer(minLength: 12)
+
+            control()
+                .frame(alignment: .trailing)
+        }
+    }
+
+    private func settingsCard<Content: View>(icon: String, title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 30, height: 30)
+                    .background {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.12))
+                    }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.headline)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
             }
-            .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 4)
+
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.05), radius: 12, x: 0, y: 6)
     }
 }
