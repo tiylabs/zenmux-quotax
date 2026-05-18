@@ -40,6 +40,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         false
     }
 
+    public func applicationWillTerminate(_ notification: Notification) {
+        AppLog.lifecycle.info("Application will terminate")
+        AppLog.shutdown(reason: "applicationWillTerminate")
+    }
+
     private func applyAppearanceMode(_ mode: AppearanceMode) {
         let appearance: NSAppearance?
         switch mode {
@@ -266,6 +271,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         closeMenuPanel()
         settingsWindow?.close()
         apiService.stopAutoRefresh()
+        AppLog.flush()
         NSApp.terminate(nil)
     }
 

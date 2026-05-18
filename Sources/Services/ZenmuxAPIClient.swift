@@ -37,14 +37,14 @@ public struct ZenmuxAPIClient: Sendable {
             let (data, response) = try await session.data(for: request)
             let duration = Date().timeIntervalSince(startedAt)
             guard let httpResponse = response as? HTTPURLResponse else {
-                AppLog.network.error("Subscription request returned a non-HTTP response after \(duration, privacy: .public)s")
+                AppLog.network.error("Subscription request returned a non-HTTP response after \(duration)s")
                 throw ZenmuxAPIError(.networkError, message: "Invalid HTTP response", diagnosticMessage: "Response type: \(String(describing: type(of: response)))")
             }
 
-            AppLog.network.debug("Subscription request finished with status \(httpResponse.statusCode, privacy: .public) in \(duration, privacy: .public)s")
+            AppLog.network.debug("Subscription request finished with status \(httpResponse.statusCode) in \(duration)s")
             guard (200..<300).contains(httpResponse.statusCode) else {
                 let body = Self.responseSnippet(from: data) ?? HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
-                AppLog.network.error("Subscription request failed with HTTP \(httpResponse.statusCode, privacy: .public); body snippet length \(body.count, privacy: .public)")
+                AppLog.network.error("Subscription request failed with HTTP \(httpResponse.statusCode); body snippet length \(body.count)")
                 throw ZenmuxAPIError(.httpError, statusCode: httpResponse.statusCode, message: body, diagnosticMessage: "HTTP \(httpResponse.statusCode), responseBodySnippet: \(body)")
             }
 
@@ -52,7 +52,7 @@ public struct ZenmuxAPIClient: Sendable {
                 let decodedResponse = try decoder.decode(ZenmuxSubscriptionResponse.self, from: data)
                 if decodedResponse.success == false {
                     let message = decodedResponse.message ?? "Zenmux API returned success=false"
-                    AppLog.network.error("Subscription API returned success=false with status \(decodedResponse.statusCode ?? -1, privacy: .public)")
+                    AppLog.network.error("Subscription API returned success=false with status \(decodedResponse.statusCode ?? -1)")
                     throw ZenmuxAPIError(.apiError, statusCode: decodedResponse.statusCode, message: message, diagnosticMessage: "Envelope success=false")
                 }
                 guard let subscriptionData = decodedResponse.data else {
@@ -63,13 +63,13 @@ public struct ZenmuxAPIClient: Sendable {
                         diagnosticMessage: "Decoded response had nil data; body snippet: \(Self.responseSnippet(from: data) ?? "<unavailable>")"
                     )
                 }
-                AppLog.network.info("Subscription request decoded successfully in \(duration, privacy: .public)s")
+                AppLog.network.info("Subscription request decoded successfully in \(duration)s")
                 return subscriptionData
             } catch let apiError as ZenmuxAPIError {
                 throw apiError
             } catch let decodingError as DecodingError {
                 let diagnostic = ZenmuxAPIError.diagnosticDescription(for: decodingError)
-                AppLog.decode.error("Subscription response decode failed: \(diagnostic, privacy: .public)")
+                AppLog.decode.error("Subscription response decode failed: \(diagnostic)")
                 throw ZenmuxAPIError(.decodeError, message: diagnostic, diagnosticMessage: "Body snippet: \(Self.responseSnippet(from: data) ?? "<unavailable>")")
             }
         } catch is CancellationError {
@@ -79,13 +79,13 @@ public struct ZenmuxAPIClient: Sendable {
             throw apiError
         } catch let urlError as URLError {
             if urlError.code == .cancelled {
-                AppLog.network.debug("Subscription request URL cancelled: \(urlError.code.rawValue, privacy: .public) \(urlError.localizedDescription, privacy: .public)")
+                AppLog.network.debug("Subscription request URL cancelled: \(urlError.code.rawValue) \(urlError.localizedDescription)")
                 throw CancellationError()
             }
-            AppLog.network.error("Subscription request URL error: \(urlError.code.rawValue, privacy: .public) \(urlError.localizedDescription, privacy: .public)")
+            AppLog.network.error("Subscription request URL error: \(urlError.code.rawValue) \(urlError.localizedDescription)")
             throw ZenmuxAPIError(.networkError, message: urlError.localizedDescription, diagnosticMessage: "URLError code: \(urlError.code.rawValue)")
         } catch {
-            AppLog.network.error("Subscription request failed unexpectedly: \(error.localizedDescription, privacy: .public)")
+            AppLog.network.error("Subscription request failed unexpectedly: \(error.localizedDescription)")
             throw ZenmuxAPIError(.networkError, message: error.localizedDescription, diagnosticMessage: String(describing: error))
         }
     }

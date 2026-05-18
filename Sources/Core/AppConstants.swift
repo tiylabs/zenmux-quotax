@@ -24,6 +24,14 @@ public enum AppConstants {
         }
     }
 
+    public enum Logging {
+        public static let directoryName = "com.zenmux.quotax"
+        public static let currentFileName = "quotax.log"
+        public static let sessionStateFileName = "session-state.json"
+        public static let maxFileSizeBytes: UInt64 = 5 * 1024 * 1024
+        public static let maxArchivedFiles = 10
+    }
+
     public enum StatusBar {
         public static let width: CGFloat = 72
     }
