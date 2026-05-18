@@ -238,6 +238,7 @@ public final class PersistentLogStore {
                 synchronizeLocked()
             }
         } catch {
+            reportEmergencyLogFailure("Failed to write log entry", error: error)
             closeFileLocked()
         }
     }
@@ -269,9 +270,12 @@ public final class PersistentLogStore {
             normalTermination: normalTermination,
             terminationReason: terminationReason
         )
-        if let data = try? JSONEncoder().encode(state) {
-            try? data.write(to: sessionStateURL, options: .atomic)
+        guard let data = try? JSONEncoder().encode(state) else { return }
+        do {
+            try data.write(to: sessionStateURL, options: .atomic)
             lastSessionStateWriteAt = Date()
+        } catch {
+            reportEmergencyLogFailure("Failed to write session state", error: error)
         }
     }
 
@@ -294,6 +298,20 @@ public final class PersistentLogStore {
 
     private func sanitize(_ message: String) -> String {
         message.replacingOccurrences(of: "\n", with: "\\n").replacingOccurrences(of: "\r", with: "\\r")
+    }
+
+    private func reportEmergencyLogFailure(_ context: String, error: Error) {
+        let fallbackLine = [
+            timestamp(),
+            "[ERROR]",
+            "[logging]",
+            "[session=\(sessionID)]",
+            "[pid=\(ProcessInfo.processInfo.processIdentifier)]",
+            "\(context): \(sanitize(error.localizedDescription))\n"
+        ].joined(separator: " ")
+        if let data = fallbackLine.data(using: .utf8) {
+            FileHandle.standardError.write(data)
+        }
     }
 
     private func synchronizeLocked() {
