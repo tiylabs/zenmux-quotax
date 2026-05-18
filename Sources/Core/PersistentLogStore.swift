@@ -51,30 +51,7 @@ public final class PersistentLogStore {
 
         self.minimumLevel = minimumLevel
         guard !hasStarted else { return }
-        hasStarted = true
-        isShutDown = false
-        sessionID = UUID().uuidString
-        sessionStartedAt = timestamp()
-        lastSessionStateWriteAt = .distantPast
-
-        do {
-            try prepareLogFileIfNeeded()
-            let previousState = readSessionState()
-            updateSessionState(normalTermination: false, terminationReason: nil)
-
-            if let previousState, !previousState.normalTermination {
-                writeUnexpectedPreviousSessionLocked(previousState)
-            }
-
-            writeIfAllowedLocked(
-                level: .info,
-                category: "lifecycle",
-                message: "Persistent file logging started; file=\(currentLogFileURL.path), minimumLevel=\(minimumLevel.rawValueString)",
-                forceSync: true
-            )
-        } catch {
-            hasStarted = false
-        }
+        beginSessionLocked()
     }
 
     public func setMinimumLevel(_ level: AppLogLevel) {
@@ -141,6 +118,10 @@ public final class PersistentLogStore {
 
     private func startLockedIfNeeded() {
         guard !hasStarted else { return }
+        beginSessionLocked()
+    }
+
+    private func beginSessionLocked() {
         hasStarted = true
         isShutDown = false
         sessionID = UUID().uuidString
@@ -153,6 +134,12 @@ public final class PersistentLogStore {
             if let previousState, !previousState.normalTermination {
                 writeUnexpectedPreviousSessionLocked(previousState)
             }
+            writeIfAllowedLocked(
+                level: .info,
+                category: "lifecycle",
+                message: "Persistent file logging started; file=\(currentLogFileURL.path), minimumLevel=\(minimumLevel.rawValueString)",
+                forceSync: true
+            )
         } catch {
             hasStarted = false
         }
@@ -192,9 +179,8 @@ public final class PersistentLogStore {
             return
         }
 
-        let archiveName = "quotax-\(archiveTimestamp()).log"
+        let archiveName = "quotax-\(archiveTimestamp())-\(UUID().uuidString).log"
         let archiveURL = logDirectoryURL.appendingPathComponent(archiveName, isDirectory: false)
-        try? fileManager.removeItem(at: archiveURL)
         try fileManager.moveItem(at: currentLogFileURL, to: archiveURL)
         fileManager.createFile(atPath: currentLogFileURL.path, contents: nil)
         removeExcessArchivedLogs()
