@@ -61,7 +61,7 @@ public final class PersistentLogStore {
         let previousLevel = minimumLevel
         minimumLevel = level
         guard hasStarted, previousLevel != level else { return }
-        writeIfAllowedLocked(
+        writeLocked(
             level: .info,
             category: "settings",
             message: "Log minimum level changed from \(previousLevel.rawValueString) to \(level.rawValueString)",
@@ -150,6 +150,7 @@ public final class PersistentLogStore {
             )
         } catch {
             hasStarted = false
+            reportEmergencyLogFailure("Failed to start persistent logging", error: error)
         }
     }
 
