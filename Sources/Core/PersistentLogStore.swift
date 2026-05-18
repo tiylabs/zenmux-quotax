@@ -63,12 +63,7 @@ public final class PersistentLogStore {
             updateSessionState(normalTermination: false, terminationReason: nil)
 
             if let previousState, !previousState.normalTermination {
-                writeIfAllowedLocked(
-                    level: .error,
-                    category: "lifecycle",
-                    message: "Previous session ended unexpectedly; previousSession=\(previousState.sessionID), previousPid=\(previousState.pid), previousStartedAt=\(previousState.startedAt), previousLastUpdatedAt=\(previousState.lastUpdatedAt)",
-                    forceSync: true
-                )
+                writeUnexpectedPreviousSessionLocked(previousState)
             }
 
             writeIfAllowedLocked(
@@ -156,12 +151,7 @@ public final class PersistentLogStore {
             let previousState = readSessionState()
             updateSessionState(normalTermination: false, terminationReason: nil)
             if let previousState, !previousState.normalTermination {
-                writeIfAllowedLocked(
-                    level: .error,
-                    category: "lifecycle",
-                    message: "Previous session ended unexpectedly; previousSession=\(previousState.sessionID), previousPid=\(previousState.pid), previousStartedAt=\(previousState.startedAt), previousLastUpdatedAt=\(previousState.lastUpdatedAt)",
-                    forceSync: true
-                )
+                writeUnexpectedPreviousSessionLocked(previousState)
             }
         } catch {
             hasStarted = false
@@ -170,6 +160,17 @@ public final class PersistentLogStore {
 
     private func shouldWrite(_ level: AppLogLevel) -> Bool {
         level.rawValue >= minimumLevel.rawValue
+    }
+
+    private func writeUnexpectedPreviousSessionLocked(_ previousState: SessionState) {
+        let message = [
+            "Previous session ended unexpectedly",
+            "previousSession=\(previousState.sessionID)",
+            "previousPid=\(previousState.pid)",
+            "previousStartedAt=\(previousState.startedAt)",
+            "previousLastUpdatedAt=\(previousState.lastUpdatedAt)"
+        ].joined(separator: "; ")
+        writeIfAllowedLocked(level: .error, category: "lifecycle", message: message, forceSync: true)
     }
 
     private func prepareLogFileIfNeeded() throws {
