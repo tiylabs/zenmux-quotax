@@ -96,14 +96,9 @@ public final class StatusBarView: NSView {
         valueParagraph.alignment = .right
         valueParagraph.lineBreakMode = .byTruncatingTail
 
-        let font = NSFontManager.shared.convert(
-            NSFont.systemFont(ofSize: 10, weight: .semibold),
-            toHaveTrait: .fixedPitchFontMask
-        )
-
         let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: color.usingColorSpace(.deviceRGB) ?? NSColor.labelColor
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .semibold),
+            .foregroundColor: color.usingColorSpace(.deviceRGB) ?? NSColor.white
         ]
 
         var labelAttributes = baseAttributes
