@@ -17,7 +17,7 @@ public final class PersistentLogStore {
     public let currentLogFileURL: URL
 
     private let sessionStateURL: URL
-    private let lock = NSLock()
+    private let lock = NSRecursiveLock()
     private let isoFormatter: ISO8601DateFormatter
     private let fileManager: FileManager
     private var fileHandle: FileHandle?
@@ -69,10 +69,7 @@ public final class PersistentLogStore {
         )
     }
 
-    public func write(level: AppLogLevel, category: String, message: @autoclosure () -> String, file: StaticString = #fileID, function: StaticString = #function, line: UInt = #line) {
-        guard isEnabled(level) else { return }
-        let renderedMessage = message()
-
+    public func write(level: AppLogLevel, category: String, message: () -> String, file: StaticString = #fileID, function: StaticString = #function, line: UInt = #line) {
         lock.lock()
         defer { lock.unlock() }
 
@@ -80,6 +77,8 @@ public final class PersistentLogStore {
         if !hasStarted {
             startLockedIfNeeded()
         }
+        let renderedMessage = message()
+        guard shouldWrite(level) else { return }
         let source = "\(file):\(line) \(function)"
         writeLocked(
             level: level,
@@ -128,12 +127,6 @@ public final class PersistentLogStore {
     private func startLockedIfNeeded() {
         guard !hasStarted else { return }
         beginSessionLocked()
-    }
-
-    private func isEnabled(_ level: AppLogLevel) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return shouldWrite(level)
     }
 
     private func beginSessionLocked() {

@@ -58,19 +58,19 @@ public struct AppFileLogger {
     }
 
     public func debug(_ message: @autoclosure () -> String, file: StaticString = #fileID, function: StaticString = #function, line: UInt = #line) {
-        PersistentLogStore.shared.write(level: .debug, category: category, message: message(), file: file, function: function, line: line)
+        PersistentLogStore.shared.write(level: .debug, category: category, message: { message() }, file: file, function: function, line: line)
     }
 
     public func info(_ message: @autoclosure () -> String, file: StaticString = #fileID, function: StaticString = #function, line: UInt = #line) {
-        PersistentLogStore.shared.write(level: .info, category: category, message: message(), file: file, function: function, line: line)
+        PersistentLogStore.shared.write(level: .info, category: category, message: { message() }, file: file, function: function, line: line)
     }
 
     public func warning(_ message: @autoclosure () -> String, file: StaticString = #fileID, function: StaticString = #function, line: UInt = #line) {
-        PersistentLogStore.shared.write(level: .warning, category: category, message: message(), file: file, function: function, line: line)
+        PersistentLogStore.shared.write(level: .warning, category: category, message: { message() }, file: file, function: function, line: line)
     }
 
     public func error(_ message: @autoclosure () -> String, file: StaticString = #fileID, function: StaticString = #function, line: UInt = #line) {
-        PersistentLogStore.shared.write(level: .error, category: category, message: message(), file: file, function: function, line: line)
+        PersistentLogStore.shared.write(level: .error, category: category, message: { message() }, file: file, function: function, line: line)
     }
 }
 
