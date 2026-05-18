@@ -28,6 +28,33 @@ struct PanelTimeFormatter {
         return format(date: date, timeZone: timeZone)
     }
 
+    static func relativeFutureText(isoString: String, timeZone: TimeZone, now: Date = Date()) -> String {
+        let date =
+            isoFormatter(formatOptions: [.withInternetDateTime, .withFractionalSeconds]).date(from: isoString)
+            ?? isoFormatter(formatOptions: [.withInternetDateTime]).date(from: isoString)
+        guard let date else { return isoString }
+
+        let remaining = Int(date.timeIntervalSince(now))
+        guard remaining > 0, remaining < 24 * 60 * 60 else {
+            return format(date: date, timeZone: timeZone)
+        }
+
+        let minutes = max(1, Int(ceil(Double(remaining) / 60.0)))
+        if minutes < 60 { return "in \(minutes) \(unit("minute", count: minutes))" }
+
+        let hours = minutes / 60
+        let remainderMinutes = minutes % 60
+        if hours < 12, remainderMinutes > 0 {
+            return "in \(hours) \(unit("hour", count: hours)) \(remainderMinutes) \(unit("minute", count: remainderMinutes))"
+        }
+
+        return "in \(hours) \(unit("hour", count: hours))"
+    }
+
+    private static func unit(_ singular: String, count: Int) -> String {
+        count == 1 ? singular : "\(singular)s"
+    }
+
     static func relativeUpdatedText(since date: Date, now: Date = Date()) -> String {
         let elapsed = max(0, Int(now.timeIntervalSince(date)))
         if elapsed < 60 { return "Updated \(elapsed) seconds ago" }
@@ -100,7 +127,7 @@ struct MenuHeaderView: View {
 
     private var expText: String {
         guard let expiresAt = data?.plan?.expiresAt else { return "Management API quota monitor" }
-        return "Expires \(PanelTimeFormatter.format(isoString: expiresAt, timeZone: settings.timeZone))"
+        return "Expires \(PanelTimeFormatter.relativeFutureText(isoString: expiresAt, timeZone: settings.timeZone))"
     }
 
     private var statusText: String {
@@ -276,7 +303,7 @@ struct MenuQuotaView: View {
 
     private var resetText: String? {
         guard let resetsAt, !resetsAt.isEmpty else { return nil }
-        return "Resets \(PanelTimeFormatter.format(isoString: resetsAt, timeZone: timeZone))"
+        return "Resets \(PanelTimeFormatter.relativeFutureText(isoString: resetsAt, timeZone: timeZone))"
     }
 
     private var progressValue: Double? {
