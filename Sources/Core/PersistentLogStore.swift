@@ -70,6 +70,9 @@ public final class PersistentLogStore {
     }
 
     public func write(level: AppLogLevel, category: String, message: @autoclosure () -> String, file: StaticString = #fileID, function: StaticString = #function, line: UInt = #line) {
+        guard isEnabled(level) else { return }
+        let renderedMessage = message()
+
         lock.lock()
         defer { lock.unlock() }
 
@@ -78,7 +81,13 @@ public final class PersistentLogStore {
             startLockedIfNeeded()
         }
         let source = "\(file):\(line) \(function)"
-        writeLocked(level: level, category: category, message: message(), source: source, forceSync: level.shouldSynchronizeImmediately || category == "lifecycle")
+        writeLocked(
+            level: level,
+            category: category,
+            message: renderedMessage,
+            source: source,
+            forceSync: level.shouldSynchronizeImmediately || category == "lifecycle"
+        )
     }
 
     public func flush() {
@@ -119,6 +128,12 @@ public final class PersistentLogStore {
     private func startLockedIfNeeded() {
         guard !hasStarted else { return }
         beginSessionLocked()
+    }
+
+    private func isEnabled(_ level: AppLogLevel) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return shouldWrite(level)
     }
 
     private func beginSessionLocked() {
