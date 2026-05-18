@@ -99,9 +99,11 @@ Sources/
     Views.swift                 SwiftUI 菜单与设置界面
 Resources/
   AppIcon.icns                  应用图标
+  DmgBackground.png             DMG 安装页背景源图
 Info.plist                      Bundle 元数据与 macOS 设置
 scripts/
   build.sh                      直接调用 swiftc 的构建脚本
+  create-dmg.sh                 带样式的 DMG 打包脚本
 .github/workflows/              Release 构建、签名、公证和上传流程
 ```
 
