@@ -96,20 +96,29 @@ public final class StatusBarView: NSView {
         valueParagraph.alignment = .right
         valueParagraph.lineBreakMode = .byTruncatingTail
 
+        let font = NSFontManager.shared.convert(
+            NSFont.systemFont(ofSize: 10, weight: .semibold),
+            toHaveTrait: .fixedPitchFontMask
+        )
+
         let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
-            .foregroundColor: color
+            .font: font,
+            .foregroundColor: color.usingColorSpace(.deviceRGB) ?? NSColor.labelColor
         ]
 
         var labelAttributes = baseAttributes
         labelAttributes[.paragraphStyle] = labelParagraph
-        NSAttributedString(string: label, attributes: labelAttributes)
-            .draw(in: NSRect(x: labelX, y: y, width: labelWidth, height: 10))
+        (label as NSString).draw(
+            in: NSRect(x: labelX, y: y, width: labelWidth, height: 10),
+            withAttributes: labelAttributes
+        )
 
         var valueAttributes = baseAttributes
         valueAttributes[.paragraphStyle] = valueParagraph
-        NSAttributedString(string: value, attributes: valueAttributes)
-            .draw(in: NSRect(x: valueX, y: y, width: valueWidth, height: 10))
+        (value as NSString).draw(
+            in: NSRect(x: valueX, y: y, width: valueWidth, height: 10),
+            withAttributes: valueAttributes
+        )
     }
 
     private func quotaDisplay(for quota: ZenmuxQuotaWindow?) -> (text: String, progress: Double?) {
