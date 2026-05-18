@@ -20,7 +20,7 @@ public struct LaunchAtLoginService {
                 AppLog.settings.info("Launch at login unregistration requested")
             }
         } catch {
-            AppLog.settings.error("Launch at login update failed: \(error.localizedDescription, privacy: .public)")
+            AppLog.settings.error("Launch at login update failed: \(error.localizedDescription)")
             throw error
         }
     }

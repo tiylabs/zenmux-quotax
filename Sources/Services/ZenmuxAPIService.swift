@@ -41,20 +41,20 @@ public final class ZenmuxAPIService: ObservableObject {
             isRefreshing = false
             inFlightRefreshTask = nil
             lastError = ZenmuxAPIError(.noAPIKey, diagnosticMessage: "Attempted subscription refresh without an API key")
-            AppLog.refresh.warning("Refresh \(requestID, privacy: .public) skipped because API key is empty")
+            AppLog.refresh.warning("Refresh \(requestID) skipped because API key is empty")
             return
         }
         guard URL(string: AppConstants.API.subscriptionDetailURLString) != nil else {
             isRefreshing = false
             inFlightRefreshTask = nil
             lastError = ZenmuxAPIError(.invalidURL, diagnosticMessage: "Invalid URL string: \(AppConstants.API.subscriptionDetailURLString)")
-            AppLog.refresh.error("Refresh \(requestID, privacy: .public) skipped because API URL is invalid")
+            AppLog.refresh.error("Refresh \(requestID) skipped because API URL is invalid")
             return
         }
 
         isRefreshing = true
         lastError = nil
-        AppLog.refresh.info("Refresh \(requestID, privacy: .public) started")
+        AppLog.refresh.info("Refresh \(requestID) started")
 
         let task = Task { [apiClient] in
             try await apiClient.fetchSubscription(apiKey: key)
@@ -64,7 +64,7 @@ public final class ZenmuxAPIService: ObservableObject {
         do {
             let data = try await task.value
             guard activeRequestID == requestID else {
-                AppLog.refresh.debug("Ignoring stale refresh \(requestID, privacy: .public) success")
+                AppLog.refresh.debug("Ignoring stale refresh \(requestID) success")
                 return
             }
             subscriptionData = data
@@ -72,30 +72,30 @@ public final class ZenmuxAPIService: ObservableObject {
             lastUpdated = Date()
             isRefreshing = false
             inFlightRefreshTask = nil
-            AppLog.refresh.info("Refresh \(requestID, privacy: .public) succeeded")
+            AppLog.refresh.info("Refresh \(requestID) succeeded")
         } catch is CancellationError {
             guard activeRequestID == requestID else { return }
             isRefreshing = false
             inFlightRefreshTask = nil
-            AppLog.refresh.debug("Refresh \(requestID, privacy: .public) cancelled")
+            AppLog.refresh.debug("Refresh \(requestID) cancelled")
         } catch let apiError as ZenmuxAPIError {
             guard activeRequestID == requestID else {
-                AppLog.refresh.debug("Ignoring stale refresh \(requestID, privacy: .public) failure")
+                AppLog.refresh.debug("Ignoring stale refresh \(requestID) failure")
                 return
             }
             lastError = apiError
             isRefreshing = false
             inFlightRefreshTask = nil
-            AppLog.refresh.error("Refresh \(requestID, privacy: .public) failed: \(apiError.type.rawValue, privacy: .public) status \(apiError.statusCode ?? -1, privacy: .public)")
+            AppLog.refresh.error("Refresh \(requestID) failed: \(apiError.type.rawValue) status \(apiError.statusCode ?? -1)")
         } catch {
             guard activeRequestID == requestID else {
-                AppLog.refresh.debug("Ignoring stale refresh \(requestID, privacy: .public) unexpected failure")
+                AppLog.refresh.debug("Ignoring stale refresh \(requestID) unexpected failure")
                 return
             }
             lastError = ZenmuxAPIError(.networkError, message: error.localizedDescription, diagnosticMessage: String(describing: error))
             isRefreshing = false
             inFlightRefreshTask = nil
-            AppLog.refresh.error("Refresh \(requestID, privacy: .public) failed unexpectedly: \(error.localizedDescription, privacy: .public)")
+            AppLog.refresh.error("Refresh \(requestID) failed unexpectedly: \(error.localizedDescription)")
         }
     }
 
@@ -108,7 +108,7 @@ public final class ZenmuxAPIService: ObservableObject {
                 let snapshot = await MainActor.run { () -> AutoRefreshSnapshot in
                     let normalizedInterval = AppConstants.Refresh.normalizedInterval(settings.refreshInterval)
                     if normalizedInterval != settings.refreshInterval {
-                        AppLog.settings.warning("Refresh interval \(settings.refreshInterval, privacy: .public)s is below minimum or invalid; using \(normalizedInterval, privacy: .public)s")
+                        AppLog.settings.warning("Refresh interval \(settings.refreshInterval)s is below minimum or invalid; using \(normalizedInterval)s")
                     }
                     self.isPaused = !settings.alwaysRefresh
                     return AutoRefreshSnapshot(
@@ -122,17 +122,17 @@ public final class ZenmuxAPIService: ObservableObject {
                 if snapshot.alwaysRefresh, !snapshot.trimmedKeyIsEmpty {
                     await self.refresh(apiKey: snapshot.apiKey)
                 } else {
-                    AppLog.refresh.debug("Auto refresh skipped; enabled=\(snapshot.alwaysRefresh, privacy: .public), hasKey=\(!snapshot.trimmedKeyIsEmpty, privacy: .public)")
+                    AppLog.refresh.debug("Auto refresh skipped; enabled=\(snapshot.alwaysRefresh), hasKey=\(!snapshot.trimmedKeyIsEmpty)")
                 }
 
-                AppLog.refresh.debug("Auto refresh sleeping for \(snapshot.interval, privacy: .public)s")
+                AppLog.refresh.debug("Auto refresh sleeping for \(snapshot.interval)s")
                 do {
                     try await Task.sleep(nanoseconds: Self.sleepNanoseconds(for: snapshot.interval))
                 } catch is CancellationError {
                     AppLog.refresh.info("Auto refresh loop cancelled")
                     return
                 } catch {
-                    AppLog.refresh.error("Auto refresh sleep failed: \(error.localizedDescription, privacy: .public)")
+                    AppLog.refresh.error("Auto refresh sleep failed: \(error.localizedDescription)")
                     return
                 }
             }

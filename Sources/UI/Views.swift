@@ -651,6 +651,7 @@ struct SettingsView: View {
                     apiKeySection
                     behaviorSection
                     displaySection
+                    diagnosticsSection
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -876,6 +877,49 @@ struct SettingsView: View {
                     .accessibilityLabel("Time zone")
                     .frame(minWidth: 280, idealWidth: 320)
                 }
+            }
+        }
+    }
+
+    private var diagnosticsSection: some View {
+        settingsCard(icon: "doc.text.magnifyingglass", title: "Diagnostics", subtitle: "Write local logs for troubleshooting unexpected exits.") {
+            VStack(spacing: 0) {
+                settingRow(
+                    title: "Minimum log level",
+                    subtitle: "Only this level and more severe entries are written to the single log file."
+                ) {
+                    Picker("Minimum log level", selection: $settings.logMinimumLevel) {
+                        ForEach(AppLogLevel.allCases) { level in
+                            Text(level.title).tag(level)
+                        }
+                    }
+                    .labelsHidden()
+                    .accessibilityLabel("Minimum log level")
+                    .pickerStyle(.segmented)
+                    .frame(width: 260)
+                }
+
+                rowDivider
+
+                settingRow(
+                    title: "Log file",
+                    subtitle: AppLog.currentLogFileURL.path
+                ) {
+                    Button {
+                        NSWorkspace.shared.open(AppLog.logDirectoryURL)
+                    } label: {
+                        Label("Open Log Folder", systemImage: "folder")
+                    }
+                    .controlSize(.regular)
+                }
+
+                rowDivider
+
+                Label("Logs may include diagnostic API error messages and quota status. They should never include your API key.", systemImage: "lock.shield")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }

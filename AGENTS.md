@@ -14,9 +14,9 @@ This repository contains a lightweight macOS menu bar app named Quotax. Swift so
 There is currently no package manager command or automated test target.
 
 ## Debugging & Logs
-Quotax uses macOS Unified Logging via `OSLog` and does not write custom log files. The subsystem is `com.zenmux.quotax`; categories are defined in `Sources/Core/AppLog.swift` and currently include `lifecycle`, `network`, `refresh`, `decode`, and `settings`.
+Quotax writes persistent file logs and no longer uses macOS Unified Logging. Logs are stored in `~/Library/Logs/com.zenmux.quotax/quotax.log`; archived logs use names like `quotax-YYYYMMDD-HHMMSS-SSS.log`, and session state is tracked in `session-state.json` so the next launch can report when the previous session did not terminate normally.
 
-Use `log stream --predicate 'subsystem == "com.zenmux.quotax"' --info --debug` to watch live logs while reproducing an issue. Use `log show --predicate 'subsystem == "com.zenmux.quotax"' --last 1h` to inspect historical logs, and add `&& category == "network"` to focus on API traffic. `URLError.cancelled` / `-999 cancelled` is normally a cancellation signal from a superseded refresh or shutdown path and should not be treated as fatal unless followed by crash or termination logs.
+The settings window includes a Diagnostics section where the minimum log level can be changed. The single log file stores entries at or above the selected threshold (`debug`, `info`, `warning`, or `error`) and includes timestamp, level, category, session id, pid, and message. Use the Diagnostics section's Open Log Folder button, or run `open ~/Library/Logs/com.zenmux.quotax/`, to inspect logs while reproducing an issue. `URLError.cancelled` / `-999 cancelled` is normally a cancellation signal from a superseded refresh or shutdown path and should not be treated as fatal unless followed by unexpected-session logs.
 
 ## Coding Style & Naming Conventions
 Follow the existing Swift style: four-space indentation, `PascalCase` for types, `camelCase` for properties and methods, and descriptive file names tied to one responsibility. Keep UI coordination on the main actor where appropriate; current app-level types use `@MainActor` and observable state. Preserve explicit access control (`public`, `private`) and prefer focused files over expanding unrelated classes.

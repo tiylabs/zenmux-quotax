@@ -58,6 +58,7 @@ public final class SettingsManager: ObservableObject {
         static let appearanceMode = "appearanceMode"
         static let timeZoneIdentifier = "timeZoneIdentifier"
         static let launchAtLogin = "launchAtLogin"
+        static let logMinimumLevel = "logMinimumLevel"
     }
 
     public static let preferredTimeZoneIdentifiers = TimeZone.knownTimeZoneIdentifiers.sorted()
@@ -100,6 +101,13 @@ public final class SettingsManager: ObservableObject {
         }
     }
 
+    @Published public var logMinimumLevel: AppLogLevel {
+        didSet {
+            defaults.set(logMinimumLevel.rawValueString, forKey: Keys.logMinimumLevel)
+            AppLog.setMinimumLevel(logMinimumLevel)
+        }
+    }
+
     @Published public private(set) var launchAtLoginError: String?
     private var isApplyingLaunchAtLoginRollback = false
 
@@ -119,7 +127,10 @@ public final class SettingsManager: ObservableObject {
         let storedTimeZone = defaults.string(forKey: Keys.timeZoneIdentifier) ?? TimeZone.current.identifier
         self.timeZoneIdentifier = TimeZone(identifier: storedTimeZone)?.identifier ?? TimeZone.current.identifier
         self.launchAtLogin = defaults.object(forKey: Keys.launchAtLogin) as? Bool ?? false
+        let storedLogMinimumLevel = defaults.string(forKey: Keys.logMinimumLevel) ?? AppLogLevel.info.rawValueString
+        self.logMinimumLevel = AppLogLevel(storedValue: storedLogMinimumLevel) ?? .info
         self.launchAtLoginError = nil
+        AppLog.setMinimumLevel(logMinimumLevel)
     }
 
     public var trimmedAPIKey: String {
