@@ -398,10 +398,15 @@ struct MenuContentView: View {
                     if let quota7 = data.quota7Day {
                         MenuQuotaView(title: "7 day flows", window: quota7, timeZone: settings.timeZone)
                     }
-                    if let monthly = data.quotaMonthly {
-                        MenuQuotaView(title: "Monthly flows", monthly: monthly, timeZone: settings.timeZone)
-                    }
                 }
+
+                MenuStatisticsChartView(
+                    tokensData: apiService.statisticsTokens,
+                    costData: apiService.statisticsCost,
+                    tokensError: apiService.statisticsTokensError,
+                    costError: apiService.statisticsCostError,
+                    timeZone: settings.timeZone
+                )
             } else {
                 emptyState
             }

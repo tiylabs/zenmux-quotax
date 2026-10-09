@@ -120,8 +120,17 @@ public struct ZenmuxAPIClient: Sendable {
 
         do {
             let (data, response) = try await session.data(for: request)
-            let httpResponse = try validateHTTPResponse(response, duration: Date().timeIntervalSince(startedAt))
-            try validateStatusCode(httpResponse, data: data, duration: Date().timeIntervalSince(startedAt))
+            let httpResponse = try validateHTTPResponse(
+                response,
+                duration: Date().timeIntervalSince(startedAt),
+                requestName: "Subscription"
+            )
+            try validateStatusCode(
+                httpResponse,
+                data: data,
+                duration: Date().timeIntervalSince(startedAt),
+                requestName: "Subscription"
+            )
             return try decodeSubscriptionResponse(from: data, duration: Date().timeIntervalSince(startedAt))
         } catch let error as ZenmuxAPIError {
             throw error
@@ -129,35 +138,152 @@ public struct ZenmuxAPIClient: Sendable {
             AppLog.network.debug("Subscription request cancelled")
             throw CancellationError()
         } catch let urlError as URLError {
-            throw wrapURLError(urlError)
+            throw wrapURLError(urlError, requestName: "Subscription")
         } catch {
             AppLog.network.error("Subscription request failed unexpectedly: \(error.localizedDescription)")
             throw ZenmuxAPIError(.networkError, message: error.localizedDescription, diagnosticMessage: String(describing: error))
         }
     }
 
-    private func validateHTTPResponse(_ response: URLResponse, duration: TimeInterval) throws -> HTTPURLResponse {
+    /// Fetches the personal account's daily series for one month (`yyyyMM`) from the
+    /// `management/usage` (tokens) or `management/cost` endpoint.
+    public func fetchAccountStatistics(
+        apiKey: String,
+        apiBaseURLString: String,
+        metric: ZenmuxStatisticsMetric,
+        queryMonth: String
+    ) async throws -> [ZenmuxAccountStatisticsItem] {
+        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            throw ZenmuxAPIError(.noAPIKey, diagnosticMessage: "Attempted statistics request without an API key")
+        }
+        guard
+            let url = AppConstants.API.accountStatisticsURL(
+                baseURLString: apiBaseURLString,
+                metric: metric,
+                queryMonth: queryMonth
+            )
+        else {
+            throw ZenmuxAPIError(.invalidURL, diagnosticMessage: "Invalid API base URL: \(apiBaseURLString)")
+        }
+
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: AppConstants.Network.timeoutInterval)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let requestName = "Statistics \(metric.rawValue) \(queryMonth)"
+        let startedAt = Date()
+        AppLog.network.debug("\(requestName) request started")
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            let httpResponse = try validateHTTPResponse(
+                response,
+                duration: Date().timeIntervalSince(startedAt),
+                requestName: requestName
+            )
+            try validateStatusCode(
+                httpResponse,
+                data: data,
+                duration: Date().timeIntervalSince(startedAt),
+                requestName: requestName
+            )
+            return try decodeAccountStatisticsResponse(
+                from: data,
+                metric: metric,
+                requestName: requestName,
+                duration: Date().timeIntervalSince(startedAt)
+            )
+        } catch let error as ZenmuxAPIError {
+            throw error
+        } catch is CancellationError {
+            AppLog.network.debug("\(requestName) request cancelled")
+            throw CancellationError()
+        } catch let urlError as URLError {
+            throw wrapURLError(urlError, requestName: requestName)
+        } catch {
+            AppLog.network.error("\(requestName) request failed unexpectedly: \(error.localizedDescription)")
+            throw ZenmuxAPIError(.networkError, message: error.localizedDescription, diagnosticMessage: String(describing: error))
+        }
+    }
+
+    private func validateHTTPResponse(
+        _ response: URLResponse,
+        duration: TimeInterval,
+        requestName: String
+    ) throws -> HTTPURLResponse {
         guard let httpResponse = response as? HTTPURLResponse else {
-            AppLog.network.error("Subscription request returned a non-HTTP response after \(duration)s")
+            AppLog.network.error("\(requestName) request returned a non-HTTP response after \(duration)s")
             throw ZenmuxAPIError(
                 .networkError,
                 message: "Invalid HTTP response",
                 diagnosticMessage: "Response type: \(String(describing: type(of: response)))"
             )
         }
-        AppLog.network.debug("Subscription request finished with status \(httpResponse.statusCode) in \(duration)s")
+        AppLog.network.debug("\(requestName) request finished with status \(httpResponse.statusCode) in \(duration)s")
         return httpResponse
     }
 
-    private func validateStatusCode(_ httpResponse: HTTPURLResponse, data: Data, duration: TimeInterval) throws {
+    private func validateStatusCode(
+        _ httpResponse: HTTPURLResponse,
+        data: Data,
+        duration: TimeInterval,
+        requestName: String
+    ) throws {
         guard (200..<300).contains(httpResponse.statusCode) else {
             let body = Self.responseSnippet(from: data) ?? HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
-            AppLog.network.error("Subscription request failed with HTTP \(httpResponse.statusCode); body snippet length \(body.count)")
+            AppLog.network.error("\(requestName) request failed with HTTP \(httpResponse.statusCode); body snippet length \(body.count)")
             throw ZenmuxAPIError(
                 .httpError,
                 statusCode: httpResponse.statusCode,
                 message: body,
                 diagnosticMessage: "HTTP \(httpResponse.statusCode), responseBodySnippet: \(body)"
+            )
+        }
+    }
+
+    private func decodeAccountStatisticsResponse(
+        from data: Data,
+        metric: ZenmuxStatisticsMetric,
+        requestName: String,
+        duration: TimeInterval
+    ) throws -> [ZenmuxAccountStatisticsItem] {
+        do {
+            let decodedResponse = try decoder.decode(ZenmuxAccountStatisticsResponse.self, from: data)
+            if decodedResponse.success == false {
+                let message = decodedResponse.message ?? "ZenMux statistics API returned success=false"
+                AppLog.network.error("\(requestName) API returned success=false with status \(decodedResponse.statusCode ?? -1)")
+                throw ZenmuxAPIError(
+                    .apiError,
+                    statusCode: decodedResponse.statusCode,
+                    message: message,
+                    diagnosticMessage: "Statistics envelope success=false"
+                )
+            }
+            guard let payload = decodedResponse.data else {
+                AppLog.decode.error("\(requestName) response decoded without data")
+                throw ZenmuxAPIError(
+                    .decodeError,
+                    message: "Statistics response did not include data.",
+                    diagnosticMessage: "Decoded response had nil data; body snippet: \(Self.responseSnippet(from: data) ?? "<unavailable>")"
+                )
+            }
+            AppLog.network.info("\(requestName) request decoded successfully in \(duration)s")
+            switch metric {
+            case .tokens: return payload.tokensByModel
+            case .cost: return payload.costByModel
+            }
+        } catch let apiError as ZenmuxAPIError {
+            throw apiError
+        } catch let decodingError as DecodingError {
+            let diagnostic = ZenmuxAPIError.diagnosticDescription(for: decodingError)
+            AppLog.decode.error("\(requestName) response decode failed: \(diagnostic)")
+            throw ZenmuxAPIError(
+                .decodeError,
+                message: diagnostic,
+                diagnosticMessage: "Body snippet: \(Self.responseSnippet(from: data) ?? "<unavailable>")"
             )
         }
     }
@@ -193,12 +319,12 @@ public struct ZenmuxAPIClient: Sendable {
         }
     }
 
-    private func wrapURLError(_ urlError: URLError) -> Error {
+    private func wrapURLError(_ urlError: URLError, requestName: String) -> Error {
         if urlError.code == .cancelled {
-            AppLog.network.debug("Subscription request URL cancelled: \(urlError.code.rawValue) \(urlError.localizedDescription)")
+            AppLog.network.debug("\(requestName) request URL cancelled: \(urlError.code.rawValue) \(urlError.localizedDescription)")
             return CancellationError()
         }
-        AppLog.network.error("Subscription request URL error: \(urlError.code.rawValue) \(urlError.localizedDescription)")
+        AppLog.network.error("\(requestName) request URL error: \(urlError.code.rawValue) \(urlError.localizedDescription)")
         return ZenmuxAPIError(.networkError, message: urlError.localizedDescription, diagnosticMessage: "URLError code: \(urlError.code.rawValue)")
     }
 

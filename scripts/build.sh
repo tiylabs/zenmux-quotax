@@ -24,6 +24,7 @@ done < <(find "$ROOT/Sources" -name '*.swift' -print0 | sort -z)
   -module-name zenmux_quotax \
   -O \
   -framework AppKit \
+  -framework Charts \
   -framework SwiftUI \
   -framework Foundation \
   -framework ServiceManagement \
