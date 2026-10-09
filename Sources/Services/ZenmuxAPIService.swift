@@ -19,7 +19,6 @@ public final class ZenmuxAPIService: ObservableObject {
     private var activeRequestID: UInt64?
 
     private static let statisticsDayCount = 30
-    private static let maxStatisticsBuckets = 60
 
     private struct AutoRefreshSnapshot {
         let alwaysRefresh: Bool
@@ -188,18 +187,17 @@ public final class ZenmuxAPIService: ObservableObject {
         metric: ZenmuxStatisticsMetric,
         dateRange: ZenmuxStatisticsDateRange
     ) async -> StatisticsFetchResult {
-        var responses: [ZenmuxStatisticsData] = []
+        var items: [ZenmuxAccountStatisticsItem] = []
 
-        for chunk in dateRange.chunks(maxBucketCount: maxStatisticsBuckets) {
+        for month in dateRange.queryMonths {
             do {
-                let response = try await apiClient.fetchStatistics(
+                let monthItems = try await apiClient.fetchAccountStatistics(
                     apiKey: apiKey,
                     apiBaseURLString: apiBaseURLString,
                     metric: metric,
-                    startingAt: chunk.startingAt,
-                    endingAt: chunk.endingAt
+                    queryMonth: month
                 )
-                responses.append(response)
+                items.append(contentsOf: monthItems)
             } catch is CancellationError {
                 return StatisticsFetchResult(data: nil, error: nil)
             } catch {
@@ -209,29 +207,32 @@ public final class ZenmuxAPIService: ObservableObject {
             }
         }
 
-        guard !responses.isEmpty else {
-            return StatisticsFetchResult(data: nil, error: nil)
-        }
         return StatisticsFetchResult(
-            data: mergeStatistics(responses, metric: metric, dateRange: dateRange),
+            data: mergeStatistics(items, metric: metric, dateRange: dateRange),
             error: nil
         )
     }
 
+    /// Converts `bizTime` (`YYYYMMDD`) items into per-day buckets, sums models within each day,
+    /// and keeps only days inside the requested range.
     private static func mergeStatistics(
-        _ responses: [ZenmuxStatisticsData],
+        _ items: [ZenmuxAccountStatisticsItem],
         metric: ZenmuxStatisticsMetric,
         dateRange: ZenmuxStatisticsDateRange
     ) -> ZenmuxStatisticsData {
-        var bucketsByDate: [String: ZenmuxStatisticsBucket] = [:]
-        for response in responses {
-            for bucket in response.series {
-                guard let date = bucket.date else { continue }
-                bucketsByDate[date] = bucket
-            }
+        var modelsByDate: [String: [ZenmuxStatisticsModelValue]] = [:]
+        for item in items {
+            guard let date = apiDateString(fromBizTime: item.bizTime),
+                date >= dateRange.startingAt, date <= dateRange.endingAt
+            else { continue }
+            modelsByDate[date, default: []].append(
+                ZenmuxStatisticsModelValue(model: item.modelSlug, label: item.modelSlug, value: item.value)
+            )
         }
 
-        let series = bucketsByDate.keys.sorted().compactMap { bucketsByDate[$0] }
+        let series = modelsByDate.keys.sorted().map { date in
+            ZenmuxStatisticsBucket(period: date, date: date, models: modelsByDate[date] ?? [])
+        }
         return ZenmuxStatisticsData(
             metric: metric.rawValue,
             bucketWidth: "1d",
@@ -240,6 +241,15 @@ public final class ZenmuxAPIService: ObservableObject {
             totalBuckets: series.count,
             series: series
         )
+    }
+
+    /// `"20260903"` -> `"2026-09-03"`; returns nil for anything else.
+    private static func apiDateString(fromBizTime bizTime: String?) -> String? {
+        guard let bizTime, bizTime.count == 8, bizTime.allSatisfy(\.isNumber) else { return nil }
+        let year = bizTime.prefix(4)
+        let month = bizTime.dropFirst(4).prefix(2)
+        let day = bizTime.suffix(2)
+        return "\(year)-\(month)-\(day)"
     }
 
     private static func normalizedAPIError(from error: Error) -> ZenmuxAPIError {

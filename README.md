@@ -28,7 +28,7 @@ Quotax sits in the macOS status bar and keeps ZenMux quota usage visible without
 
 - Shows 5-hour and 7-day quota percentages directly in the macOS menu bar.
 - Displays detailed 5-hour and 7-day quota cards in a SwiftUI menu panel.
-- Shows a daily tokens-or-cost bar chart for the last 30 days, including today; the statistics API may leave today's bar at zero until the next aggregation.
+- Shows a daily tokens-or-cost bar chart for the last 30 days, including today, for your own account (from the account `usage` / `cost` Management APIs, not site-wide data); today's bar may stay at zero until the next aggregation.
 - Supports manual refresh and automatic refresh with a configurable interval.
 - Stores the ZenMux Management API key and preferences in `UserDefaults`.
 - Supports launch at login through `ServiceManagement`.

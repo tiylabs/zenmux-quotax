@@ -29,27 +29,23 @@ struct ZenmuxStatisticsDateRange: Sendable {
         return Self(start: start, end: end)
     }
 
-    func chunks(maxBucketCount: Int) -> [ZenmuxStatisticsDateRange] {
-        guard maxBucketCount > 0, start <= end else { return [] }
+    /// Distinct calendar months (`yyyyMM`, UTC) touched by this range, in ascending order.
+    var queryMonths: [String] {
+        guard start <= end else { return [] }
 
         let calendar = Self.utcCalendar
-        var ranges: [ZenmuxStatisticsDateRange] = []
-        var chunkStart = start
-
-        while chunkStart <= end {
-            guard let candidateEnd = calendar.date(byAdding: .day, value: maxBucketCount - 1, to: chunkStart) else {
-                break
+        var months: [String] = []
+        var cursor = start
+        while cursor <= end {
+            let parts = calendar.dateComponents([.year, .month], from: cursor)
+            if let year = parts.year, let month = parts.month {
+                let value = String(format: "%04d%02d", year, month)
+                if months.last != value { months.append(value) }
             }
-            let chunkEnd = min(candidateEnd, end)
-            ranges.append(Self.init(start: chunkStart, end: chunkEnd))
-
-            guard let nextStart = calendar.date(byAdding: .day, value: 1, to: chunkEnd), nextStart > chunkStart else {
-                break
-            }
-            chunkStart = nextStart
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor), next > cursor else { break }
+            cursor = next
         }
-
-        return ranges
+        return months
     }
 
     private static var utcCalendar: Calendar {

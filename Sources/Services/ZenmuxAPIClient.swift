@@ -145,23 +145,23 @@ public struct ZenmuxAPIClient: Sendable {
         }
     }
 
-    public func fetchStatistics(
+    /// Fetches the personal account's daily series for one month (`yyyyMM`) from the
+    /// `management/usage` (tokens) or `management/cost` endpoint.
+    public func fetchAccountStatistics(
         apiKey: String,
         apiBaseURLString: String,
         metric: ZenmuxStatisticsMetric,
-        startingAt: String,
-        endingAt: String
-    ) async throws -> ZenmuxStatisticsData {
+        queryMonth: String
+    ) async throws -> [ZenmuxAccountStatisticsItem] {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
             throw ZenmuxAPIError(.noAPIKey, diagnosticMessage: "Attempted statistics request without an API key")
         }
         guard
-            let url = AppConstants.API.statisticsTimeseriesURL(
+            let url = AppConstants.API.accountStatisticsURL(
                 baseURLString: apiBaseURLString,
                 metric: metric,
-                startingAt: startingAt,
-                endingAt: endingAt
+                queryMonth: queryMonth
             )
         else {
             throw ZenmuxAPIError(.invalidURL, diagnosticMessage: "Invalid API base URL: \(apiBaseURLString)")
@@ -173,7 +173,7 @@ public struct ZenmuxAPIClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let requestName = "Statistics \(metric.rawValue)"
+        let requestName = "Statistics \(metric.rawValue) \(queryMonth)"
         let startedAt = Date()
         AppLog.network.debug("\(requestName) request started")
 
@@ -190,9 +190,10 @@ public struct ZenmuxAPIClient: Sendable {
                 duration: Date().timeIntervalSince(startedAt),
                 requestName: requestName
             )
-            return try decodeStatisticsResponse(
+            return try decodeAccountStatisticsResponse(
                 from: data,
                 metric: metric,
+                requestName: requestName,
                 duration: Date().timeIntervalSince(startedAt)
             )
         } catch let error as ZenmuxAPIError {
@@ -243,16 +244,17 @@ public struct ZenmuxAPIClient: Sendable {
         }
     }
 
-    private func decodeStatisticsResponse(
+    private func decodeAccountStatisticsResponse(
         from data: Data,
         metric: ZenmuxStatisticsMetric,
+        requestName: String,
         duration: TimeInterval
-    ) throws -> ZenmuxStatisticsData {
+    ) throws -> [ZenmuxAccountStatisticsItem] {
         do {
-            let decodedResponse = try decoder.decode(ZenmuxStatisticsResponse.self, from: data)
+            let decodedResponse = try decoder.decode(ZenmuxAccountStatisticsResponse.self, from: data)
             if decodedResponse.success == false {
                 let message = decodedResponse.message ?? "ZenMux statistics API returned success=false"
-                AppLog.network.error("Statistics \(metric.rawValue) API returned success=false with status \(decodedResponse.statusCode ?? -1)")
+                AppLog.network.error("\(requestName) API returned success=false with status \(decodedResponse.statusCode ?? -1)")
                 throw ZenmuxAPIError(
                     .apiError,
                     statusCode: decodedResponse.statusCode,
@@ -260,21 +262,24 @@ public struct ZenmuxAPIClient: Sendable {
                     diagnosticMessage: "Statistics envelope success=false"
                 )
             }
-            guard let statisticsData = decodedResponse.data else {
-                AppLog.decode.error("Statistics \(metric.rawValue) response decoded without data")
+            guard let payload = decodedResponse.data else {
+                AppLog.decode.error("\(requestName) response decoded without data")
                 throw ZenmuxAPIError(
                     .decodeError,
                     message: "Statistics response did not include data.",
                     diagnosticMessage: "Decoded response had nil data; body snippet: \(Self.responseSnippet(from: data) ?? "<unavailable>")"
                 )
             }
-            AppLog.network.info("Statistics \(metric.rawValue) request decoded successfully in \(duration)s")
-            return statisticsData
+            AppLog.network.info("\(requestName) request decoded successfully in \(duration)s")
+            switch metric {
+            case .tokens: return payload.tokensByModel
+            case .cost: return payload.costByModel
+            }
         } catch let apiError as ZenmuxAPIError {
             throw apiError
         } catch let decodingError as DecodingError {
             let diagnostic = ZenmuxAPIError.diagnosticDescription(for: decodingError)
-            AppLog.decode.error("Statistics \(metric.rawValue) response decode failed: \(diagnostic)")
+            AppLog.decode.error("\(requestName) response decode failed: \(diagnostic)")
             throw ZenmuxAPIError(
                 .decodeError,
                 message: diagnostic,

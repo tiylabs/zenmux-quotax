@@ -183,11 +183,14 @@ public struct ZenmuxPlan: Decodable, Equatable {
     }
 }
 
-public struct ZenmuxStatisticsResponse: Decodable {
+/// Envelope for the personal-account `management/usage` and `management/cost` endpoints.
+/// Amounts and counts are decimal strings; `tokens` (usage) and `billAmount` (cost) are
+/// normalized into a single `value`.
+public struct ZenmuxAccountStatisticsResponse: Decodable {
     public var success: Bool?
     public var statusCode: Int?
     public var message: String?
-    public var data: ZenmuxStatisticsData?
+    public var data: ZenmuxAccountStatisticsPayload?
 
     enum CodingKeys: String, CodingKey {
         case success
@@ -196,24 +199,64 @@ public struct ZenmuxStatisticsResponse: Decodable {
         case data
     }
 
-    public init(
-        success: Bool? = nil,
-        statusCode: Int? = nil,
-        message: String? = nil,
-        data: ZenmuxStatisticsData? = nil
-    ) {
-        self.success = success
-        self.statusCode = statusCode
-        self.message = message
-        self.data = data
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        success = try container.decodeIfPresent(Bool.self, forKey: .success)
+        statusCode = try container.decodeFlexibleIntIfPresent(forKey: .statusCode)
+        message = try container.decodeFlexibleStringIfPresent(forKey: .message)
+        data = try container.decodeIfPresent(ZenmuxAccountStatisticsPayload.self, forKey: .data)
+    }
+}
+
+public struct ZenmuxAccountStatisticsPayload: Decodable {
+    /// `type=usage` grouping by time and model.
+    public var tokensByModel: [ZenmuxAccountStatisticsItem]
+    /// `type=cost` grouping by time and model.
+    public var costByModel: [ZenmuxAccountStatisticsItem]
+
+    enum CodingKeys: String, CodingKey {
+        case tokensByModel
+        case analysis
+    }
+
+    enum AnalysisKeys: String, CodingKey {
+        case costByModel
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        success = try container.decodeIfPresent(Bool.self, forKey: .success)
-        statusCode = try container.decodeIfPresent(Int.self, forKey: .statusCode)
-        message = try container.decodeIfPresent(String.self, forKey: .message)
-        data = try container.decodeIfPresent(ZenmuxStatisticsData.self, forKey: .data)
+        tokensByModel = try container.decodeIfPresent([ZenmuxAccountStatisticsItem].self, forKey: .tokensByModel) ?? []
+        let analysis = try? container.nestedContainer(keyedBy: AnalysisKeys.self, forKey: .analysis)
+        costByModel = try analysis?.decodeIfPresent([ZenmuxAccountStatisticsItem].self, forKey: .costByModel) ?? []
+    }
+}
+
+public struct ZenmuxAccountStatisticsItem: Decodable, Equatable, Sendable {
+    /// `YYYYMMDD` for `BIZ_MTH` queries.
+    public var bizTime: String?
+    public var modelSlug: String?
+    public var value: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case bizTime
+        case modelSlug
+        case tokens
+        case billAmount
+    }
+
+    public init(bizTime: String? = nil, modelSlug: String? = nil, value: Double? = nil) {
+        self.bizTime = bizTime
+        self.modelSlug = modelSlug
+        self.value = value
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        bizTime = try container.decodeFlexibleStringIfPresent(forKey: .bizTime)
+        modelSlug = try container.decodeFlexibleStringIfPresent(forKey: .modelSlug)
+        value =
+            try container.decodeFlexibleDoubleIfPresent(forKey: .billAmount)
+            ?? container.decodeFlexibleDoubleIfPresent(forKey: .tokens)
     }
 }
 
